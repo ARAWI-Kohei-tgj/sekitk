@@ -18,36 +18,32 @@ if(isFloatingPoint!T || isComplex!T){
 	/************************************************************
 	 * Template of Eucledean vector
 	 ************************************************************/
-	struct Vector(TypeOfSize Size) if(Size > 0u){
+	class Vector(TypeOfSize Size) if(Size > 0u){
 		mixin VectorBase!(T, Threshold, Size);
+		mixin(VECTOR_BASE_IMPL);
 
 		// Constructors
-		@safe pure nothrow{
-			import std.algorithm: copy;
-
-			/// copy constructor
-			this(in typeof(this) other){
-				other._values[].copy(this._values[]);
-			}
+		nothrow{
+			import core.vararg;//: _arguments, va_arg, _argptr;
 
 			/// Initialize by a column matrix
-			this(in Matrix!(Size, 1u, MatrixType.dense) vec) @nogc{
-				vec.v[].copy(this._values[]);
+			this(MajorOrder MatOdr)(in Matrix!(Size, 1u,
+																				 MatrixType.dense,
+																				 MatOdr) vec) @safe pure @nogc{
+				this._values[]= vec.v[];
 			}
-		}
-
-		@system{
-			import core.vararg;//: _arguments, va_arg, _argptr;
-			this(...)	@system nothrow	// FIXME:
+/+
+			this(...)	@system	// FIXME:
 			in(_arguments.length == Size){
 				foreach(ref T num; this._values) num= va_arg!T(_argptr);
 			}
++/
 		}
 
 		// Operators
 	  @safe pure nothrow const{
 			/// dot product
-			auto opBinary(string Op: "*")(in typeof(this) rhs){
+			auto opBinary(string Op: "*")(in typeof(this) rhs) @nogc{
 				return this.dotProdImpl(rhs);
 			}
 
@@ -110,7 +106,7 @@ if(isFloatingPoint!T || isComplex!T){
 							-this._values[4]*rhs._values[1]
 							+this._values[5]*rhs._values[0];
 					}
-					return typeof(return)(elm);
+					return new typeof(return)(elm);
 				}
 			}
 
@@ -136,23 +132,26 @@ if(isFloatingPoint!T || isComplex!T){
 			 * Throws:
 			 *  RangeError
 			 ************************/
-			T opIndex(in size_t idx) @nogc
-			in(idx > 0u && idx <= Size){return _values[idx-1u];}
+			T opIndex(IdxType)(in IdxType idx) @nogc
+			if(isIntegral!IdxType)
+			in(idx > 0u)
+			in(idx <= Size){
+			  return _values[idx-1u];
+		  }
 
 			/************************
 			 * Slice operator
 			 *
 			 ************************/
-			T[] opSlice(in size_t st, in size_t en)
-			in(st > 0u &&
-				 en <= Size &&
-				 en > st){
+			T[] opSlice(IdxType)(in IdxType st, in IdxType en)
+			if(isIntegral!IdxType)
+		  in(st > 0u)
+			in(en <= Size)
+		  in(en > st){
 				return this._values[st-1u..en-1u].dup;
 		  }
 
-			/**
-			 *
-			 */
+			/// length of the array
 			alias opDollar= Size;
 
 			/************************
@@ -171,14 +170,8 @@ if(isFloatingPoint!T || isComplex!T){
 			}
 		}
 
-		/******************************************
-		 * Reserved methods
-		 ******************************************/
+	  // Reserved methods
 		@safe const{
-			Vector!Size dup() pure nothrow{
-				return new typeof(return)(this.a);
-			}
-
 			void toString(Writer, Char)(scope Writer w, FormatSpec!Char formatSpec)
 			if(isOutputRange!(Writer, const(Char)[])){
 				import std.format: formatValue;
@@ -193,7 +186,7 @@ if(isFloatingPoint!T || isComplex!T){
 			}
 
 			/// ditto
-		  string toString(){
+		  override string toString(){
 				import numeric.sekitk.qvm_base: trustedAssumeUnique;
 				enum ubyte DIGITS= 6u;	// 暫定桁数
 
@@ -203,6 +196,7 @@ if(isFloatingPoint!T || isComplex!T){
 				this.toString((const(char)[] s){buf ~= s;}, fmt);
 				return trustedAssumeUnique(buf);
 			}
+
 			unittest{
 				double[4] temp= [1.2, -3.4, 5.6, -7.8];
 				auto vec= SekiTK!double.Vector!4u(temp);
@@ -214,20 +208,20 @@ if(isFloatingPoint!T || isComplex!T){
 			}
 		}
 
-		/******************************************
-		 * Other methods
-		 ******************************************/
-		@safe pure nothrow @nogc const{
-			Matrix!(1u, Size, MatrixType.dense, MajorOrder.row) rowVector(){
-				return typeof(return)(this._values[]);
+	  // Other methods
+		@safe pure nothrow const{
+			Matrix!(1u, Size,
+							MatrixType.dense,
+							MatOdr) rowVector(MajorOrder MatOdr= MajorOrder.row)(){
+				return new typeof(return)(this._values[]);
 			}
 
 			static if(Size == 2u || Size == 3u){
-				T x(){return _values[0];}
-				T y(){return _values[1];}
+				T x() @nogc{return _values[0];}
+				T y() @nogc{return _values[1];}
 			}
 			static if(Size == 3u){
-				T z(){return _values[2];}
+				T z() @nogc{return _values[2];}
 			}
 
 			version(future){
@@ -244,7 +238,7 @@ if(isFloatingPoint!T || isComplex!T){
 					foreach(i; 0u..Size)
 						foreach(j; 0u..Size){{num[i*Size+j]= this._values[i]*rhs._values[j];}}
 
-					return typeof(return)(num);
+					return new typeof(return)(num);
 				}
 			}
 

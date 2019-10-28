@@ -34,7 +34,7 @@ private:
 			auto idxSet= IndexSetDiag!TmplArgsOfThis();
 			foreach(i; idxSet) mixin("num[i] " ~PM ~"= rhs.v[j++];");
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
 		// other shape
@@ -65,7 +65,7 @@ private:
 				assert(false);
 			}
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
 		// matrix multiplications
@@ -323,15 +323,8 @@ private:
 		T detImpl() @safe pure nothrow @nogc const{
 			typeof(return) result;
 
-			final switch(MatOdr){
-			case MajorOrder.row, MajorOrder.column:
-				result= v[0]*(v[4]*v[8]-v[5]*v[7])
-					+v[1]*(v[5]*v[6]-v[3]*v[8]) +v[2]*(v[3]*v[7]-v[4]*v[6]);
-				break;
-			case MajorOrder.diag:
-				result= v[0]*(v[1]*v[2]-v[4]*v[6])
-					+v[3]*(v[4]*v[8]-v[2]*v[5]) +v[7]*(v[5]*v[6]-v[1]*v[8]);
-			}
+			result= v[0]*(v[4]*v[8]-v[5]*v[7])
+				+v[1]*(v[5]*v[6]-v[3]*v[8]) +v[2]*(v[3]*v[7]-v[4]*v[6]);
 
 			return result;
 		}

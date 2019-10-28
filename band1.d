@@ -79,7 +79,7 @@ public:
 					en += i+2u;
 				}
 			}
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
 		/++++++++++++++++++++++
@@ -91,12 +91,12 @@ public:
 	  if(isUnsignedInt!N){
 			typeof(return) result;
 			if(rhs == 0u){
-				result= typeof(return)(Identity!(T, "*"));
+				result= new typeof(return)(Identity!(T, "*"));
 			}
 			else{
 				T[arrayLength!(Row, Column, MatrixType.band1)] num;
 				num[]= this.v[]^^rhs;
-				result= typeof(return)(num);
+				result= new typeof(return)(num);
 			}
 			return result;
 		}
@@ -129,7 +129,7 @@ public:
 				size_t j= 0u;
 				foreach(i; idxset) num[i]= this.v[j++];
 			}
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 	}
 
@@ -143,7 +143,7 @@ public:
 			static if(isFloatingPoint!T) import numeric.pseudocmplx: conj;
 
 			foreach(idx; 0u..Size) num[idx]= v[idx].conj;
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 	}
 

@@ -15,17 +15,18 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 	/************************************************************
 	 * Quaternion type
 	 ************************************************************/
-	struct Quaternion{
+  class Quaternion{
+		mixin VectorBase!(T, Threshold, 4u);
+		mixin(VECTOR_BASE_IMPL);
+
 	private:
 		enum TypeOfSize Size= 4u;
 
 	public:
-		mixin VectorBase!(T, Threshold, 4u);
-
 		// constructors
 		@safe pure nothrow @nogc{
 			/****************************************
-			 * Initialize by each elements
+			 * Initialize with each elements
 			 *
 			 * Params:
 			 *	w= scalar part
@@ -82,7 +83,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 					+this._values[1]*rhs._values[2]
 					-this._values[2]*rhs._values[1]
 					+this._values[3]*rhs._values[0];
-				return typeof(return)(num);
+				return new typeof(return)(num);
 			}
 
 			/// quaternion / quaternion
@@ -103,16 +104,12 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 					+rhs._values[2]*this._values[1]
 					-rhs._values[3]*this._values[0];
 				foreach(ref elm; num) elm /= k;
-				return typeof(return)(num);
+				return new typeof(return)(num);
 			}
 		}
 
 		// Reserved methods
 		@safe const{
-			TypeOfThis dup() pure nothrow{
-				return typeof(return)(this._values);
-			}
-
 			/****************************************
 			 * 
 			 ****************************************/
@@ -134,7 +131,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 			}
 
 			/// ditto
-			string toString(){
+			override string toString(){
 				import numeric.sekitk.qvm_base: trustedAssumeUnique;
 
 				char[] buf;
@@ -152,14 +149,14 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 		}
 
 		// Other methods
-		@property @safe pure nothrow @nogc const{
+		@property @safe pure nothrow const{
 			/****************************************
 			 * Each elements
 			 ****************************************/
-			T w(){return _values[0];}
-			T x(){return _values[1];}
-			T y(){return _values[2];}
-			T z(){return _values[3];}
+			T w() @nogc{return _values[0];}
+			T x() @nogc{return _values[1];}
+			T y() @nogc{return _values[2];}
+			T z() @nogc{return _values[3];}
 
 			/****************************************
 			 * Conjugate quaternion
@@ -168,7 +165,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 				T[4] num= void;
 				num[0]= this._values[0];
 				num[1 .. 3] = -this._values[1 .. 3];
-				return typeof(return)(num);
+				return new typeof(return)(num);
 			}
 
 			/****************************************
@@ -176,7 +173,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 			 ****************************************/
 			Vector!3u vec(){
 				T[3] temp= _values[1..4];
-				return Vector!3u(temp);
+				return new Vector!3u(temp);
 			}
 		}
 

@@ -5,7 +5,7 @@
  ******************************************************************************/
 module sekitk.indexset;
 
-import sekitk.base: TypeOfSize, MatrixType, MajorOrder;
+import sekitk.base;
 
 /**************************************************************
  * Mixin templates
@@ -17,8 +17,6 @@ mixin template IndexSetBase(MatrixType Shape: MatrixType.zero, IndexSetType IdxT
 	import std.typecons: Tuple, tuple;
 	import std.traits: Unqual, ParameterTypeTuple;
 	import core.exception: onRangeError;
-
-	import sekitk.base;
 
 	/********************************************
 	 * Constructors
@@ -77,6 +75,7 @@ if(Shape is MatrixType.dense ||
 	 Shape is MatrixType.upperTri ||
 	 Shape is MatrixType.lowerTri){
 	import core.exception: onRangeError;
+	import std.traits: Unqual, ParameterTypeTuple;
 
 	/********************************************
 	 * Constructor
@@ -122,16 +121,18 @@ if(Shape is MatrixType.dense ||
 	}
 
 	@safe{
-		enum IMPL= "const size_t offset= _itrStep.totalStep;
-typeof(return) result= 0;
-TypeOfIndex idx= _idx;
-auto step= Unqual!(typeof(_itrStep))(_itrStep);
-foreach(_; offset..offset+_itrStep.totalStepRemain){
-result= dg(idx);
-idx= recurrRel(idx, step++);
-}
-return result;
-";
+		enum string IMPL= q{
+			const size_t offset= _itrStep.totalStep;
+			typeof(return) result= 0;
+			TypeOfIndex idx= _idx;
+			auto step= Unqual!(typeof(_itrStep))(_itrStep);
+			foreach(_; offset..offset+_itrStep.totalStepRemain){
+				result= dg(idx);
+				idx= recurrRel(idx, step++);
+			}
+			return result;
+		};
+
 		int opApply(Dg)(scope Dg dg) if(ParameterTypeTuple!Dg.length == 1){
 			mixin(IMPL);
 		}
@@ -180,7 +181,9 @@ if(Shape is MatrixType.zero){
 /// ditto
 struct IndexSetDiag(TypeOfSize Row, TypeOfSize Column, MatrixType Shape, MajorOrder MatOdr)
 if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
+	import std.traits: Unqual;
 	import std.algorithm: min;
+	import std.range: iota, repeat;
 
 	enum TypeOfIndex[1] INDEX_INIT= [0];
 	enum string INITIALIZE= "_idx= INDEX_INIT[0];_itrStep.initialize;";
@@ -198,29 +201,23 @@ if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
 	  size_t result;
 
 		if(itrStep < length){
-			final switch(MatOdr){
-			case MajorOrder.row, MajorOrder.column:
-				final switch(Shape){
-				case MatrixType.zero:
-					assert(false);	// unreachable
-				case MatrixType.dense:
-					result= (MatOdr is MajorOrder.row)? i*(Column+1u) : i*(Row+1u);
-					break;
-				case MatrixType.band1:
-					result= i;
-					break;
-				case MatrixType.band3:
-					result= 3u*i;
-					break;
-				case MatrixType.upperTri:
-					result= (MatOdr is MajorOrder.row)? i*Column-sumFromZero(i)+i : i+sumFromZero(i);
-					break;
-				case MatrixType.lowerTri:
-					result= (MatOdr is MajorOrder.row)? i+sumFromZero(i) : i*Row-sumFromZero(i)+i;
-				}
+			final switch(Shape){
+			case MatrixType.zero:
+				assert(false);	// unreachable
+			case MatrixType.dense:
+				result= (MatOdr is MajorOrder.row)? i*(Column+1u) : i*(Row+1u);
 				break;
-			case MajorOrder.diag:
+			case MatrixType.band1:
 				result= i;
+				break;
+			case MatrixType.band3:
+				result= 3u*i;
+				break;
+			case MatrixType.upperTri:
+				result= (MatOdr is MajorOrder.row)? i*Column-sumFromZero(i)+i : i+sumFromZero(i);
+				break;
+			case MatrixType.lowerTri:
+				result= (MatOdr is MajorOrder.row)? i+sumFromZero(i) : i*Row-sumFromZero(i)+i;
 			}
 		}
 		else{
@@ -236,23 +233,21 @@ private:
 	TypeOfIndex recurrRel(in TypeOfIndex idxCurr, in Unqual!(typeof(_itrStep)) itr) @safe pure nothrow @nogc const{
 		typeof(return) result= idxCurr;
 
-		final switch(MatOdr){
-		case MajorOrder.row, MajorOrder.column:
-			final switch(Shape){
-			case MatrixType.zero:
-				assert(false);
-				break;
-			case MatrixType.dense:
-				result += (MatOdr is MajorOrder.row)? Column+1u: Row+1u;
-				break;
-			case MatrixType.band1:
-				result += 1u;
-				break;
-			case MatrixType.band3:
-				result += 3u;
-				break;
-			case MatrixType.upperTri:
-				result += (MatOdr is MajorOrder.row)? Row-itr.stepLocal: itr.stepLocal+2u;
+		final switch(Shape){
+		case MatrixType.zero:
+			assert(false);
+			break;
+		case MatrixType.dense:
+			result += (MatOdr is MajorOrder.row)? Column+1u: Row+1u;
+			break;
+		case MatrixType.band1:
+			result += 1u;
+			break;
+		case MatrixType.band3:
+			result += 3u;
+			break;
+		case MatrixType.upperTri:
+			result += (MatOdr is MajorOrder.row)? Row-itr.stepLocal: itr.stepLocal+2u;
 /+
 Matrix!(6, 6, Dense, Row)
  0  1  2  3  4  5
@@ -272,14 +267,9 @@ Matrix!(6, 6, Dense, Column)
  *  *  *  *  * 20
 idx= [0, 2, 5, 9, 14, 20]; d= 2, 3, 4, 5, 6
 +/
-				break;
-			case MatrixType.lowerTri:
-				result += (MatOdr is MajorOrder.row)? itr.stepLocal+2u: Column-itr.stepLocal;
-			}
 			break;
-		case MajorOrder.diag:
-			if(Shape is MatrixType.zero) assert(false);
-			else ++result;
+		case MatrixType.lowerTri:
+			result += (MatOdr is MajorOrder.row)? itr.stepLocal+2u: Column-itr.stepLocal;
 		}
 		return result;
 	}
@@ -300,6 +290,7 @@ struct IndexSetSubDiag(TypeOfSize Size, MatrixType Shape, MajorOrder MatOdr)
 if(Shape !is MatrixType.zero &&
 	 Shape !is MatrixType.band1 &&
 	 Size > 2u && matrixConstraint!(Size, Size, Shape)){
+	import std.traits: Unqual;
 
 	enum TypeOfIndex[_itrStep.MAX_ITR_SLICE] INDEX_INIT= (){
 	  TypeOfIndex[_itrStep.MAX_ITR_SLICE] result;
@@ -423,6 +414,8 @@ if(Shape !is MatrixType.zero &&
 	 Shape !is MatrixType.band1 &&
 	 Shape !is MatrixType.lowerTri &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
+	import std.traits: Unqual;
+	import std.range: iota, repeat;
 
 	/********************************************
 	 * Manifest constants
@@ -545,6 +538,8 @@ if(Shape !is MatrixType.zero &&
 	 Shape !is MatrixType.band1 &&
 	 Shape !is MatrixType.upperTri &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
+	import std.traits: Unqual;
+	import std.range: iota, repeat;
 
 	/********************************************
 	 * Manifest constants
@@ -651,6 +646,11 @@ private:
  **********************************************/
 struct IndexSetTranspose(TypeOfSize Row, TypeOfSize Column, MatrixType Shape, MajorOrder MatOdr)
 if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
+	import core.exception: onRangeError;
+	import std.algorithm: sum;
+	import std.array: staticArray;
+	import std.range: iota, repeat;
+
 	enum TypeOfSize MAX_ITR_SLICE= (MatOdr is MajorOrder.row)? Row: Column;
 	enum TypeOfSize[MAX_ITR_SLICE] MAX_ITR_LOCAL= (){
 		static if(Shape is MatrixType.dense){
@@ -728,8 +728,6 @@ private:
 					break;
 				case MajorOrder.column:
 					result += Column;
-					break;
-				case MajorOrder.diag:
 				}
 				break;
 			case MatrixType.band3:
@@ -786,6 +784,8 @@ if((Size > 0 && Typ is IndexSetType.diag) ||
 	 (Size > 2 && Typ is IndexSetType.subDiag) ||
 	 (Size > 1 && Typ is IndexSetType.strictUpperTri) ||
 	 (Size > 1 && Typ is IndexSetType.strictLowerTri)){
+	import core.exception: onRangeError;
+	import std.algorithm: sum;
 
 	/********************************************
 	 * Manifest constants
@@ -872,6 +872,8 @@ if((Size > 0 && Typ is IndexSetType.diag) ||
 
 		auto itrPosition(in size_t totalStep){
 			import std.algorithm: maxElement;
+			import std.typecons: tuple;
+
 			if(totalStep >= this.totalStep) onRangeError;
 
 			TypeOfSize posSlice= MAX_ITR_SLICE;

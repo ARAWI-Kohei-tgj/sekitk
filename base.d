@@ -357,30 +357,13 @@ in(isBijective!(Row, Column, Shape)(cast(TypeOfSize)(idxRow),
 			break;
 		case MajorOrder.column:
 			result= cast(TypeOfIndex)(idxColumn*Row+idxRow);
-			break;
-		case MajorOrder.diag:
-			uint tempIdx= idxColumn-1;
-			const uint en= 1u+ ((idxRow-idxColumn >= 0)?
-													idxRow-idxColumn:
-													idxColumn-idxRow);
-			if(idxRow-idxColumn < 0) tempIdx -= Row;
-			foreach(k; 0..en) tempIdx += 2*(Row-k)-1;
-			result= cast(TypeOfIndex)tempIdx;
 		}
 	}
 	else static if(Shape is MatrixType.band1){
 		result= idxRow;
 	}
 	else static if(Shape is MatrixType.band3){
-		final switch(MatOdr){
-		case MajorOrder.row, MajorOrder.column:
-			result= idxRow*2u+idxColumn;
-			break;
-		case MajorOrder.diag:
-			if(idxRow == idxColumn) result= idxRow;
-			else if(idxRow < idxColumn) result= Row-1 +idxColumn;
-			else result= 2*Row-2+idxRow;
-		}
+		result= idxRow*2u+idxColumn;
 	}
 	else static if(Shape is MatrixType.upperTri){
 		final switch(MatOdr){
@@ -389,8 +372,6 @@ in(isBijective!(Row, Column, Shape)(cast(TypeOfSize)(idxRow),
 			break;
 		case MajorOrder.column:
 			result= cast(TypeOfIndex)(sumFromZero(idxRow)+idxColumn);
-			break;
-		case MajorOrder.diag:
 		}
 	}
 	else static if(Shape is MatrixType.lowerTri){
@@ -400,8 +381,6 @@ in(isBijective!(Row, Column, Shape)(cast(TypeOfSize)(idxRow),
 			break;
 		case MajorOrder.column:
 			result= cast(TypeOfIndex)(idxRow*Column+idxColumn-sumFromZero(idxRow));
-			break;
-		case MajorOrder.diag:
 		}
 	}
 	else{
