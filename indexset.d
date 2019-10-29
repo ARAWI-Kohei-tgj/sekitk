@@ -10,7 +10,11 @@ import sekitk.base;
 /**************************************************************
  * Mixin templates
  **************************************************************/
-mixin template IndexSetBase(MatrixType Shape: MatrixType.zero, IndexSetType IdxTyp){
+mixin template IndexSetBase(MatrixType Shape, IndexSetType IdxTyp)
+if(Shape is MatrixType.zero ||
+	 Shape is MatrixType.band3 ||
+	 Shape is MatrixType.upperTri ||
+	 Shape is MatrixType.lowerTri){
 	import std.algorithm;
 	import std.array;
 	import std.range;
@@ -75,6 +79,7 @@ if(Shape is MatrixType.dense ||
 	 Shape is MatrixType.upperTri ||
 	 Shape is MatrixType.lowerTri){
 	import core.exception: onRangeError;
+	import std.algorithm: min;
 	import std.traits: Unqual, ParameterTypeTuple;
 
 	/********************************************
@@ -415,13 +420,15 @@ if(Shape !is MatrixType.zero &&
 	 Shape !is MatrixType.lowerTri &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
 	import std.traits: Unqual;
-	import std.range: iota, repeat;
+	import std.range: iota, recurrence, repeat;
+	import mathematic.progression: sumFromZero;
 
 	/********************************************
 	 * Manifest constants
 	 ********************************************/
 	static if(Shape is MatrixType.dense || Shape is MatrixType.upperTri){
 		enum TypeOfIndex[_itrStep.MAX_ITR_SLICE] INDEX_INIT= (){
+			import std.array: staticArray;
 			enum TypeOfSize LEN= _itrStep.MAX_ITR_SLICE;
 			TypeOfIndex[LEN] num;
 			static if(MatOdr is MajorOrder.row){
@@ -502,18 +509,12 @@ private:
 		else{
 			result= idxCurr;
 
-			final switch(MatOdr){
-			case MajorOrder.diag:
-				++ result;
+			final switch(Shape){
+			case MatrixType.dense, MatrixType.upperTri, MatrixType.band3:
+				result += 1u;
 				break;
-			case MajorOrder.row, MajorOrder.column:
-				final switch(Shape){
-				case MatrixType.dense, MatrixType.upperTri, MatrixType.band3:
-					result += 1u;
-					break;
-				case MatrixType.zero, MatrixType.band1, MatrixType.lowerTri:
-					assert(false);
-				}
+			case MatrixType.zero, MatrixType.band1, MatrixType.lowerTri:
+				assert(false);
 			}
 		}
 
@@ -540,6 +541,7 @@ if(Shape !is MatrixType.zero &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
 	import std.traits: Unqual;
 	import std.range: iota, repeat;
+	import mathematic.progression: sumFromZero;
 
 	/********************************************
 	 * Manifest constants
@@ -622,18 +624,12 @@ private:
 		else{
 			result= idxCurr;
 
-			final switch(MatOdr){
-			case MajorOrder.diag:
-				++ result;
+			final switch(Shape){
+			case MatrixType.dense, MatrixType.lowerTri, MatrixType.band3:
+				result += 1u;
 				break;
-			case MajorOrder.row, MajorOrder.column:
-				final switch(Shape){
-				case MatrixType.dense, MatrixType.lowerTri, MatrixType.band3:
-					result += 1u;
-					break;
-				case MatrixType.zero, MatrixType.band1, MatrixType.upperTri:
-					assert(false);
-				}
+			case MatrixType.zero, MatrixType.band1, MatrixType.upperTri:
+				assert(false);
 			}
 		}
 
@@ -649,7 +645,7 @@ if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
 	import core.exception: onRangeError;
 	import std.algorithm: sum;
 	import std.array: staticArray;
-	import std.range: iota, repeat;
+	import std.range: iota, recurrence, repeat, retro;
 
 	enum TypeOfSize MAX_ITR_SLICE= (MatOdr is MajorOrder.row)? Row: Column;
 	enum TypeOfSize[MAX_ITR_SLICE] MAX_ITR_LOCAL= (){
@@ -758,6 +754,9 @@ private:
 	else{
 		enum TypeOfSize Size= Row;
 		TypeOfIndex[Size] idxBeg= (){
+			import std.array: staticArray;
+			import std.range: take;
+
 			static if(Shape is MatrixType.band1){
 				auto idxSet= iota(0u, Size);
 			}
@@ -786,6 +785,7 @@ if((Size > 0 && Typ is IndexSetType.diag) ||
 	 (Size > 1 && Typ is IndexSetType.strictLowerTri)){
 	import core.exception: onRangeError;
 	import std.algorithm: sum;
+	import std.range: iota, retro;
 
 	/********************************************
 	 * Manifest constants
@@ -815,8 +815,8 @@ if((Size > 0 && Typ is IndexSetType.diag) ||
 								 Typ is IndexSetType.strictLowerTri){
 		enum TypeOfSize MAX_ITR_SLICE= Size-1;
 		enum TypeOfSize[MAX_ITR_SLICE] MAX_ITR_LOCAL= (){
-			static if(MatOdr is MajorOrder.diag ||
-								(Typ is IndexSetType.strictUpperTri && MatOdr is MajorOrder.row) ||
+			import std.array: staticArray;
+			static if((Typ is IndexSetType.strictUpperTri && MatOdr is MajorOrder.row) ||
 								(Typ is IndexSetType.strictLowerTri && MatOdr is MajorOrder.column)){
 				auto temp= iota(1u, Size).retro;
 			}

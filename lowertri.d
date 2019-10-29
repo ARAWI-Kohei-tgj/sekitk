@@ -4,9 +4,13 @@
 module sekitk.lowertri;
 
 import sekitk.base: TypeOfSize, MajorOrder;
-
+/+
 mixin template LowerTriangular(T, real Threshold, TypeOfSize Size, MajorOrder MatOdr){
++/
+enum string LOWER_TRI= q{
+	import std.range: dropOne;
 	import sekitk.base;
+
 public:
 	/********************************************
 	 * Operators
@@ -28,7 +32,7 @@ public:
 			TypeOfInternalArray num= this.v[];
 			TypeOfIndex j= 0;
 			auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
-			foreach(idx; idxSet) mixin("num[idx]" ~PM ~"= rhs.v[j++];");
+			foreach(idx; idxSet) mixin("num[idx]" ~PM ~"= rhs._values[j++];");
 			return new typeof(return)(num);
 		}
 
@@ -51,41 +55,44 @@ public:
 				{
 					auto temp0= IndexSetDiag!(Row, Column, ShapeOfReturn, MatOdr)();
 					auto temp1= IndexSetStrictTriL!(Size, ShapeOfReturn, MatOdr)();
-					foreach(idx; merge(temp0, temp1)) num[idx]= this.v[j++];
+					foreach(idx; merge(temp0, temp1)) num[idx]= this._values[j++];
 				}
 			}
 			// rhs
 			static if(ShapeR is MatrixType.dense){
-				foreach(TypeOfIndex idx; 0u..(num.length)) mixin("num[idx] " ~PM ~"= rhs.v[idx];");
+				foreach(TypeOfIndex idx; 0u..(num.length)) mixin("num[idx] " ~PM ~"= rhs._values[idx];");
 			}
 			else static if(ShapeR is MatrixType.band3){
 				TypeOfIndex j= 0u;
 				auto temp0= IndexSetDiag!(Row, Column, MatrixType.dense, MatOdr)();
 				auto temp1= IndexSetSubDiag!(Size, MatrixType.dense, MatOdr)();
-				foreach(idx; merge(temp0, temp1)) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; merge(temp0, temp1)) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 			else{	// UpperTri
 				TypeOfIndex j= 0u;
 				auto temp= IndexSetStrictTriR!(Size, ShapeOfReturn, MatOdr)();
-				foreach(idx; temp) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; temp) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 
 			return new typeof(return)(num);
 		}
 
-		/++++++++++++++
-		 + matrix multiplication
-		 +++++++++++++/
-		// lower triangular * dense
-		auto opBinary(string OP: "*",
-									uint ColumnR,
-									MatrixType ShapeR)(in Matrix!(Column, ColumnR, ShapeR) rhs){
-			enum TypeOfResult= MatOpReturnType!(OP, Shape, ShapeR);
-		  T[arrayLength!(Row, ColumnR, TypeOfResult)] num= void;
+		// matrix multiplication
+		/******************************************
+		 * lower triangular * dense
+		 ******************************************/
+		Matrix!(Row, ColumnR,
+						MatOpReturnType!(Op, Shape, ShapeR),
+						MatOdr) opBinary(string Op: "*",
+														 TypeOfSize ColumnR,
+														 MatrixType ShapeR)(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs)
+		if(ShapeR !is MatrixType.zero){
+			enum TypeOfIndex LEN= arrayLength!(Row, ColumnR, MatOpReturnType!(Op, Shape, ShapeR));
+		  T[LEN] num= void;
 
 			final switch(ShapeR){
 			case MatrixType.zero:
-				break;
+				assert(false);
 			case MatrixType.dense:
 				break;
 			case MatrixType.band1:
@@ -97,13 +104,13 @@ public:
 				size_t idxPrd= 0, idxLhs= void, idxRhs= void;
 				foreach(i; 0u..Row){
 					idxLhs= sumFromZero(i);
-					num[idxPrd++]= this.v[idxLhs]*rhs.v[0];
+					num[idxPrd++]= this._values[idxLhs]*rhs._values[0];
 					foreach(j; 1u..ColumnR){
 						idxRhs= j;
-						num[idxPrd]= this.v[idxLhs]*rhs.v[idxRhs];
+						num[idxPrd]= this._values[idxLhs]*rhs._values[idxRhs];
 						foreach(k; 1u..((i+1u > j)? j+1u : i+1u)){
 							idxRhs += ColumnR-k;
-							num[idxPrd] += this.v[idxLhs+k]*rhs.v[idxRhs];
+							num[idxPrd] += this._values[idxLhs+k]*rhs._values[idxRhs];
 						}
 						++idxPrd;
 					}
@@ -112,13 +119,8 @@ public:
 			case MatrixType.lowerTri:
 			}
 
-			return new Matrix!(Row, ColumnR, TypeOfResult)(num);
+			return new typeof(return)(num);
 		}
-
-		// lower triangular * diagonal
-
-		// lower triangular * tridiagonal
-
 		unittest{	// lower triangular * upper triangular
 			SekiTK!double.Matrix!(5, 5, MatrixType.lowerTri) lhsLowtri;
 			SekiTK!double.Matrix!(5, 5, MatrixType.upperTri) rhsUptri;
@@ -142,40 +144,15 @@ public:
 																		313073, 718166, 1312787, 1929096, 1394692,
 																		12077, 654402, 1594275, 2669640, 1683191];
 			auto mul= lhsLowtri*rhsUptri;
-			assert(mul.v[] == result[]);
+			assert(mul._values[] == result[]);
 		}
 	}
 
-	/******************************
-	 * Other methods
-	 *****************************/
-	@safe pure const{
-		/++++++++++++++
-		 + transpose
-		 +++++++++++++/
-		Matrix!(Column, Row, MatrixType.upperTri) transposed() @property{
-			static if(isFloatingPoint!T) import numeric.pseudocmplx: conj;
-			T[arrayLength!(Column, Row, MatrixType.upperTri)] num= void;
-/+
-			{
-				TypeOfIndex j= 0u;
-				auto idxSetU= new IndexSetDiag!(Column, Row, MatrixType.UpperTri);
-				auto idxSetL= new IdxSetDiag;
-				for(; !idxSetU.empty && !idxSetL.empty; idxSetU.popFront, idxSetL.popFront) num[idx]= v[idx].conj;
-			}+/
-			/+
-			 Impl
-			 +/
-			return new typeof(return)(num);
-		}
-	}
-
-	//--------------------------------------------------------------------------|
 private:
-	@safe pure nothrow const{
-		/++
-		 +
-		 ++/
+	@safe pure nothrow @nogc const{
+		/******************************************
+		 *
+		 ******************************************/
 		T[arrayLength!(Row, Column, MatrixType.dense)] arrayDense(){
 			import std.algorithm: merge;
 
@@ -188,43 +165,44 @@ private:
 				TypeOfIndex j= 0u;
 				auto temp0= IndexSetDiag!(Row, Column, MatrixType.dense, MatOdr)();
 				auto temp1= IndexSetStrictTriL!(Size, MatrixType.dense, MatOdr)();
-				foreach(idx; merge(temp0, temp1)) num[idx]= this.v[j++];
+				foreach(idx; merge(temp0, temp1)) num[idx]= this._values[j++];
 			}
 
 			return num;
 		}
 
-		/++
-		 +
-		 ++/
-		T detImpl() @nogc{
-			typeof(return) result= v[0];
-			foreach(num; v[1u..$]) result *= num;
+		/******************************************
+		 *
+		 ******************************************/
+		T detImpl(){
+			typeof(return) result= _values[0];
+			auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
+			foreach(TypeOfIndex idx; idxSet.dropOne) result *= _values[idx];
 			return result;
 		}
 
-		/++
-		 +
-		 ++/
-		T[arrayLength!(Size, Size, MatrixType.lowerTri)] inverseImpl() @nogc{
+		/******************************************
+		 *
+		 ******************************************/
+		T[arrayLength!(Size, Size, MatrixType.lowerTri)] inverseImpl(){
 			typeof(return) num= void;
 
 			static if(Size == 1){
-				num= [Identity!(T, "*")/v[0]];
+				num= [Identity!(T, "*")/_values[0]];
 			}
 			else static if(Size == 2){
-				num= [v[2], -v[1], v[0]];
+				num= [_values[2], -_values[1], _values[0]];
 				num[] /= this.det;
 			}
 			else static if(Size == 3){
-				num= [v[3]*v[5], -v[1]*v[5], v[1]*v[4]-v[2]*v[3],
-							v[0]*v[5], -v[0]*v[4],
-							v[0]*v[3]];
+				num= [_values[3]*_values[5], -_values[1]*_values[5], _values[1]*_values[4]-_values[2]*_values[3],
+							_values[0]*_values[5], -_values[0]*_values[4],
+							_values[0]*_values[3]];
 				num[] /= this.det;
 			}
-			else assert(false, "FIXME: inverse of n>2 lower triangular matrix");
+			else assert(false, "FIXME: inverse of n > 3 lower triangular matrix");
 
 			return num;
 		}
 	}
-}
+};

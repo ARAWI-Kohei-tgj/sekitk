@@ -15,6 +15,10 @@ struct MatrixAttribute(TypeOfSize Row, TypeOfSize Column, MatrixType Shape){
 			return (_invertible is Ternary.yes);
 		}
 
+		bool isSingular() const{
+			return (_invertible is Ternary.no);
+		}
+
 		void setInvertibility(inout scope bool state){
 			_invertible= state? Ternary.yes: Ternary.no;
 		}

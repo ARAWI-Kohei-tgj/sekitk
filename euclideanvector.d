@@ -187,7 +187,7 @@ if(isFloatingPoint!T || isComplex!T){
 
 			/// ditto
 		  override string toString(){
-				import numeric.sekitk.qvm_base: trustedAssumeUnique;
+				import sekitk.base: trustedAssumeUnique;
 				enum ubyte DIGITS= 6u;	// 暫定桁数
 
 				char[] buf;

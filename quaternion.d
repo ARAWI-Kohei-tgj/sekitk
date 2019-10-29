@@ -132,7 +132,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 
 			/// ditto
 			override string toString(){
-				import numeric.sekitk.qvm_base: trustedAssumeUnique;
+				import sekitk.base: trustedAssumeUnique;
 
 				char[] buf;
 				buf.reserve(Size*6u+(PREFIX.length+SUFFIX.length)*char.sizeof);

@@ -47,7 +47,7 @@ mixin template MatrixImpl(T, real Threshold){
 			// sign
 			TypeOfThis opUnary(string Op)() @nogc
 			if(isPlusOrMinusSign!Op){
-				return typeof(return)();
+				return new typeof(return)();
 			}
 
 			// add & sub
@@ -58,32 +58,37 @@ mixin template MatrixImpl(T, real Threshold){
 																														 ShapeR,
 																														 MatOdr) rhs) @nogc
 			if(isPlusOrMinusSign!Op){
-				return typeof(return)(rhs);
+				return new typeof(return)(rhs);
 			}
 
-		  TypeOfThis opBinary(string Op)(in T rhs) @nogc
-			if(Op == "*" || Op == "/"){
-				return typeof(return)();
+			/****************************************
+			 * O * scalar, O / scalar
+			 ****************************************/
+		  TypeOfThis opBinary(string Op, TypeR)(in TypeR rhs) @nogc
+			if((Op == "*" || Op == "/") && is(TypeR: T)){
+				return new typeof(return)();
 			}
 
 			// scalar * matrix
 			// O(m*n)
 			TypeOfThis opBinaryRight(string OP: "*")(in T lhs){
-				return typeof(return)();
+				return new typeof(return)();
 			}
 
 			// matrix * vector
 		  Matrix!(Row, 1, Shape, MatOdr) opBinary(string OP: "*")(in Vector!Column rhs){
-			  return typeof(return)();
+			  return new typeof(return)();
 			}
 
-			// matrix multiplication
+			/****************************************
+			 * O * Matrix
+			 ****************************************/
 			Matrix!(Row, ColumnR,
 						  Shape, MatOdr) opBinary(string OP: "*",
 																			TypeOfSize ColumnR,
 																			MatrixType ShapeR)(in Matrix!(Column, ColumnR,
 																																		ShapeR, MatOdr) rhs){
-				return typeof(return)();
+				return new typeof(return)();
 			}
 		}
 	}
@@ -92,12 +97,15 @@ mixin template MatrixImpl(T, real Threshold){
 	class Matrix(TypeOfSize Row, TypeOfSize Column,
 							 MatrixType Shape, MajorOrder MatOdr= MajorOrder.row)
 	if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
-		import std.traits: Unqual, TemplateArgsOf;
+		import std.traits: Unqual, TemplateArgsOf,
+			isDynamicArray, isStaticArray, isIntegral;
 		import std.range: isOutputRange;
 		import std.typecons: Tuple, Ternary;
 		import std.format: FormatSpec;
 		import std.complex;
+
 		import sekitk.base;
+		import sekitk.attribute;
 
 		/******************************************
 		 * Alias and manifest constants
@@ -113,8 +121,9 @@ mixin template MatrixImpl(T, real Threshold){
 		}
 
 		alias TypeOfThis= typeof(this);
-		alias TmplArgsOfThis= TemplateArgsOf!(typeof(this));
-		alias TypeOfInternalArray= T[arrayLength!(Row, Column, Shape)];
+		alias TemplateArgs= TemplateArgsOf!(typeof(this));
+		alias TypeOfInternalArray= T[arrayLength!(TemplateArgs[0..3])];
+		alias TypeOfAttr= MatrixAttribute!(TemplateArgs[0..3]);
 
 		enum T VALUE_ZERO= T(0.0L);
 		enum bool isSquare= (Row == Column)? true : false;
@@ -133,50 +142,45 @@ mixin template MatrixImpl(T, real Threshold){
 		static if(Shape is MatrixType.dense){
 			import sekitk.dense;
 			static if(isSquare){
-				mixin SqDense!(T, Threshold, Size, MatOdr) MethodsImpl;
+			  mixin(SQ_DENSE);
 			}
 			else{
-				mixin RectDense!(T, Threshold, Row, Column, MatOdr) MethodsImpl;
+				mixin(RECT_DENSE);
 			}
 		}
 		else static if(Shape is MatrixType.band1){
 			import sekitk.band1;
-			mixin Band1!(T, Threshold, Size, MatOdr) MethodsImpl;
+			mixin(BAND1_IMPL);
 		}
 		else static if(Shape is MatrixType.band3){
 			import sekitk.band3;
 			mixin Band3!(T, Threshold, Size, MatOdr) MethodsImpl;
 		}
 		else static if(Shape is MatrixType.upperTri){
-			import sekitk.uppertri: UpperTriangular;
-			mixin UpperTriangular!(T, Threshold, Size, MatOdr) MethodsImpl;
+			import sekitk.uppertri;
+			mixin(UPPER_TRI);
 		}
 		else static if(Shape is MatrixType.lowerTri){
-			import sekitk.lowertri: LowerTriangular;
-			mixin LowerTriangular!(T, Threshold, Size, MatOdr) MethodsImpl;
+			import sekitk.lowertri;
+			mixin(LOWER_TRI);
 		}
 
-		/******************************************
-		 * Constructors
-		 ******************************************/
+	  // Constructors
 	  @safe pure nothrow{
 			import std.algorithm: copy;
 
 			/// Default constructor
-			this() @nogc{
-			  attrInitialize();
-			}
+			this() @nogc{}
 
-			/************************
+			/****************************************
 			 * Copy constructor (the same shape)
 			 * Params:
 			 * 	other= another matrix of type "Matrix!(Row, Column, Shape, MatOdr)"
-			 ************************/
-			this(in TypeOfThis other) @nogc{
-				this.v[]= other.v[];
-
+			 ****************************************/
+			this(inout scope TypeOfThis other){
+				this._values[]= other._values[];
+				this._attr= other._attr;
 				static if(isSquare){
-					this.attr.isInvertible= other.attr.isInvertible;
 					if(other.ev !is null) this.ev= new typeof(ev)(other.ev);	// eigen values
 
 					final switch(Shape){	// LU decomposition
@@ -187,195 +191,157 @@ mixin template MatrixImpl(T, real Threshold){
 						break;
 					}
 				}
-				else{
-					attrInitialize();
-				}
 			}
 
-			/************************
-			 * Initialize by a number of type "T"
+			/****************************************
+			 * Initialize with a number of type "T"
 			 * Params:
 			 * 	num= a number
-			 ************************/
-			this(in T num) @nogc{
-				v[]= num;
-				static if(isSquare && Size > 1){
-					attr.isInvertible= Ternary.no;
-				}
-				else{
-					attr.isInvertible= isSquare? Ternary.unknown: Ternary.no;
-				}
-				attr.isUnitary= Ternary.no;
+			 ****************************************/
+			this(TypeScalar)(inout scope TypeScalar num) @nogc
+		  if(is(TypeScalar: T)){
+				_values[]= num;
 			}
 
-			/************************
-			 * Initialize by a static array
+			/****************************************
+			 * Initialize with an array
 			 * Params:
-			 * 	nums= 
+			 * 	nums= array of type ArrayType
 			 * 	attrGiven= 
-			 ************************/
-			this(in TypeOfInternalArray nums, in typeof(attr) attrGiven) @nogc{
-				nums[].copy(this.v[]);
-				attr= attrGiven;
+			 ****************************************/
+			this(ArrayType)(scope inout ArrayType nums,
+										  scope inout TypeOfAttr attrGiven= TypeOfAttr.init) @nogc
+			if((isDynamicArray!ArrayType && is(Unqual!ArrayType: T[])) ||
+				 (isStaticArray!ArrayType && is(Unqual!ArrayType: TypeOfInternalArray)))
+			in(nums.length == arrayLength!(TemplateArgs[0..3]), "mismatch array length"){
+			  _values[]= nums[];
+				_attr= attrGiven;
 			}
 
-			/// ditto
-			this(in TypeOfInternalArray nums) @nogc{
-			  nums[].copy(this.v[]);
-			  attrInitialize();
-			}
-
-			/************************
-			 * Initialize by a dynamic array
-			 * Params:
-			 *
-			 * Throws:
-			 * 	AssertError
-			 ************************/
-			this(in T[] nums)
-		  in(nums.length == v.length, "Mismatch array length."){
-			  nums[].copy(v[]);
-			  attrInitialize();
-			}
-
-			/************************
-			 * for only dense matrix
-			 ************************/
+			// for only dense matrix
 			static if(Shape is MatrixType.dense){
-				static if(MatOdr is MajorOrder.row){
-					this(in T[Column][Row] num) @nogc{
-					  size_t st, en;
-						foreach(i; 0u..Row){
-							st= i*Column;
-							en= st+Column;
-							num[i][].copy(this.v[st..en]);
-						}
-						attrInitialize();
-					}
+				/**************************************
+				 * Initialize with a 2-dimensional array
+				 **************************************/
+				this(ArrayType)(scope inout T[Column][Row] num,
+												scope inout TypeOfAttr attrGiven= TypeOfAttr.init) @nogc
+				if((MatOdr is MajorOrder.row) && is(Unqual!ArrayType: T[Column][Row]) ||
+					 (MatOdr is MajorOrder.column) && is(Unqual!ArrayType: T[Row][Column])){
+					enum TypeOfSize ITR_LIMIT= (MatOdr is MajorOrder.row)? Row: Column;
+					enum TypeOfSize STEP= (MatOdr is MajorOrder.row)? Column: Row;
+					size_t st, en= 0u;
 
-					this(in Vector!Row[Column] vecArray) @nogc{
+					foreach(i; 0u..ITR_LIMIT){
+						st= en;
+						en += STEP;
+					  _values[st..en]= num[i][];
+					}
+					_attr= attrGiven;
+				}
+
+				/**************************************
+				 * Initialize with an array of Vector!Row
+				 **************************************/
+				this(scope inout Vector!Row[Column] vecArray,
+												 scope inout TypeOfAttr attrGiven= TypeOfAttr.init) @nogc{
+					static if(MatOdr is MajorOrder.row){
 						size_t idx= void;
 						foreach(idx_h; 0..Column){
 							idx= idx_h;
 							foreach(idx_v; 0u..Row){
-								this.v[idx]= vecArray[idx_h]._values[idx_v];
+								this._values[idx]= vecArray[idx_h]._values[idx_v];
 								idx += Column;
 							}
 						}
-						attrInitialize();
 					}
-				}
-				else static if(MatOdr is MajorOrder.column){
-					this(in T[Row][Column] num) @nogc{
-						size_t st, en;
-						foreach(i; 0u..Column){
-							st= i*Row;
-							en= st+Row;
-							num[i][].copy(this.v[st..en]);
-						}
-						attrInitialize();
-					}
-
-					this(in Vector!Row[Column] vecArray) @nogc{
+					else{
 						size_t idx_st= 0u, idx_en= Row;
 						foreach(idx_h; 0u..Column){
-							vecArray[idx_h]._values[].copy(this.v[idx_st..idx_en]);
+							this._values[idx_st..idx_en]= vecArray[idx_h]._values[];
 							idx_st= idx_en;
 							idx_en += Row;
 						}
-						attrInitialize();
 					}
+					_attr= attrGiven;
 				}
+
 			}	// end of block "Shape is MatrixType.dense"
 		}
 
-		/******************************************
-		 * Operators & Reserved methods
-		 ******************************************/
+	  // Operators & Reserved methods
 		/// plus or minus sign
 		@safe pure nothrow const{
 			TypeOfThis opUnary(string Op: "+")() @nogc{
-				return typeof(return)(this.v[]);
+				return new typeof(return)(this);
 			}
 
 			TypeOfThis opUnary(string Op: "-")() @nogc{
-				TypeOfInternalArray temp= void;
-				temp[]= -this.v[];
-				return typeof(return)(temp);
+				TypeOfInternalArray result= _values[];
+				foreach(ref elm; result) elm= -elm;
+				return new typeof(return)(result);
 			}
 
-			// add & sub (the same shape)
-		  TypeOfThis opBinary(string Op)(in TypeOfThis rhs) @nogc
+			/****************************************
+			 * Matrix ± Matrix
+			 ****************************************/
+		  TypeOfThis opBinary(string Op)(inout scope TypeOfThis rhs) @nogc
 			if(isPlusOrMinusSign!Op){
-			  TypeOfInternalArray temp= this.v[]; 
-				mixin("temp[] " ~Op ~"= rhs.v[];");
-				return typeof(return)(temp);
+			  TypeOfInternalArray temp= _values[]; 
+				mixin("temp[] " ~Op ~"= rhs._values[];");
+				return new typeof(return)(temp);
 			}
 
-			// add & sub (different shape)
+			/// ditto
 		  TypeOfThis opBinary(string Op,
 													MatrixType ShapeR: MatrixType.zero
-													)(in Matrix!(Row, Column, ShapeR, MatOdr) rhs) @nogc
+													)(inout scope Matrix!(Row, Column, ShapeR, MatOdr) rhs) @nogc
 			if(isPlusOrMinusSign!Op && ShapeR != Shape){
-				return typeof(return)();
+				return new typeof(return)(this);
 			}
 
-			// non-zero matrix pm zero matrix
-		  Matrix!(Row, Column,
-							MatOpReturnType!(Op, Shape, ShapeR),
-							MatOdr) opBinary(string Op,
-															 MatrixType ShapeR)(in Matrix!(Row, Column,
-																														 ShapeR,
-																														 MatOdr) rhs) @nogc
-			if(isPlusOrMinusSign!Op && ShapeR != Shape){
-				pragma(msg, "add sub from matrix.d");
-				return MethodsImpl.opBinary!(PM, ShapeR)(rhs);
-			}
 
-			/// multiplication & division operators
+			/****************************************
+			 * Matrix * Scalar, Matrix / Scalar
+			 ****************************************/
 			// matrix * scalar or matrix / scalar
 			// O(m*n)
-		  TypeOfThis opBinary(string Op)(in T rhs) @nogc
-			if(Op == "*" || Op == "/"){
-			  TypeOfInternalArray num= this.v[]; 
+		  TypeOfThis opBinary(string Op, TypeR)(inout scope TypeR rhs) @nogc
+			if((Op == "*" || Op == "/") && is(TypeR: T)){
+			  TypeOfInternalArray num= _values[]; 
 				mixin("num[] " ~Op ~"= rhs;");
-				return typeof(return)(num);
+				return new typeof(return)(num);
 			}
 
-			// scalar * matrix
+			/****************************************
+			 * Scalar * Matrix
+			 ****************************************/
 			// O(m*n)
-		  TypeOfThis opBinaryRight(string Op: "*")(in T lhs) @nogc{
-				return this.opBinary!Op(lhs);
+		  TypeOfThis opBinaryRight(string Op: "*", TypeL)(inout scope TypeL lhs) @nogc
+			if(is(TypeL: T)){
+				return this.opBinary!(Op, TypeL)(lhs);
 			}
 
-			// matrix * vector
-			Vector!Row opBinary(string OP: "*")(in Vector!Column rhs) @nogc{
+			/****************************************
+			 * Matrix * Vector
+			 ****************************************/
+			Vector!Row opBinary(string OP: "*")(inout scope Vector!Column rhs) @nogc{
 				auto colmat= Matrix!(Column, 1u, MatrixType.dense, MatOdr)(rhs.a);
-			  return typeof(return)(this*colmat);
+			  return new typeof(return)(this*colmat);
 			}
 
-			// matrix multiplication
+			/****************************************
+			 * Matrix * O
+			 ****************************************/
 			Matrix!(Row, ColumnR,
 							MatrixType.zero,
 							MatOdr) opBinary(string Op: "*",
 															 TypeOfSize ColumnR,
 															 MatrixType ShapeR: MatrixType.zero
-															 )(in Matrix!(Column, ColumnR,
-																						ShapeR,
-																						MatOdr) rhs) @nogc{
-				return typeof(return)();
+															 )(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs) @nogc{
+				return new typeof(return)();
 			}
 
-			Matrix!(Row, ColumnR,
-							MatOpReturnType!(OP, Shape, ShapeR),
-							MatOdr) opBinary(string Op: "*",
-															 TypeOfSize ColumnR,
-															 MatrixType ShapeR)(in Matrix!(Column, ColumnR,
-																														 ShapeR, MatOdr) rhs) @nogc{
-				return MethodsImpl.opBinary!(Op, ColumnR, ShapeR, MatOdr)(rhs);
-			}
-
-			/****************
+			/****************************************
 			 * Index operator
 			 *
 			 * Params:
@@ -386,39 +352,32 @@ mixin template MatrixImpl(T, real Threshold){
 			 *
 			 * Throws:
 			 *  RangeError
-			 ****************/
-			Vector!Row opIndex(in size_t j) @nogc{
-				import core.exception: onRangeError;
-				typeof(return) vec;
-
-				if(j > 0u && j <= Column){
-					vec= typeof(return)(sliceColumn(j-1u));
-				}
-				else{
-					onRangeError;
-				}
-
-				return vec;
+			 ****************************************/
+			Vector!Row opIndex(IdxType)(inout scope IdxType j)
+			if(isIntegral!IdxType)
+			in(j > 0u && j <= Column){
+				return new typeof(return)(sliceColumn(j-1u));
 			}
 
-			/************************
+			/****************************************
 			 * element
 			 * Throws:
 			 *  RangeError
-			 ************************/
-			T opIndex(in size_t idxRow, in size_t idxColumn) @nogc{
+			 ****************************************/
+			T opIndex(IdxType)(inout scope IdxType idxRow, inout scope IdxType idxColumn) @nogc
+			if(isIntegral!IdxType){
 				typeof(return) result;
 				const auto pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
 				if(pos.rangeCheck){
 				  auto map= indexOfInternalArray!(Row, Column, Shape, MatOdr)(pos);
-					result= map.isZero? VALUE_ZERO : v[map.index];
+					result= map.isZero? VALUE_ZERO : _values[map.index];
 				}
 				return result;
 			}
 
-			/************************
-			 * Cast operators
-			 ************************/
+			/****************************************
+			 * Cast to dense matrix
+			 ****************************************/
 		  Mat opCast(Mat: Matrix!(Row, Column, MatrixType.dense, MatOdr))(){
 			  typeof(return) result;
 			  static if(Shape is MatrixType.dense){
@@ -431,61 +390,64 @@ mixin template MatrixImpl(T, real Threshold){
 				return result;
 			}
 
-			static if(MatOdr is MajorOrder.row){
-				Array2D opCast(Array2D: T[Column][Row])() @nogc{
-					typeof(return) num= void;
+			/****************************************
+			 * Cast to 2-dimensional array
+			 ****************************************/
+			Array2D opCast(Array2D: T[Column][Row])() @nogc
+			if(((MatOdr is MajorOrder.row) && is(Array2D: T[Column][Row])) ||
+				 ((MatOdr is MajorOrder.column) && is(Array2D: T[Row][Column]))){
+				enum ITR_LIMIT_OUTER= (MatOdr is MajorOrder.row)? Row: Column;
+				enum ITR_LIMIT_INNER= (MatOdr is MajorOrder.row)? Column: Row;
+				typeof(return) num= void;
 
-					foreach(i; 0u..Row)
-						foreach(j; 0u..Column){{
-								num[i][j]= this.opIndex(i+1u, j+1u);
-			  	}}
+				foreach(i; 0u..ITR_LIMIT_OUTER)
+					foreach(j; 0u..ITR_LIMIT_INNER){{
+						num[i][j]= this.opIndex(i+1u, j+1u);
+			  }}
 
-					return num;
-				}
-			}
-			else static if(MatOdr is MajorOrder.column){
-				Array2D opCast(Array2D: T[Row][Column])() @nogc{
-					typeof(return) num= void;
-					foreach(j; 0u..Column){
-						foreach(i; 0u..Row){
-							num[j][i]= this.opIndex(i+1u, j+1u);
-						}
-					}
-					return num;
-				}
+				return num;
 			}
 		}	// end of block `@safe pure nothrow const'
 
-		/******************************************
-		 * Reserved methods
-		 ******************************************/
+	  // Reserved methods
 		@safe const{
-			Matrix!(Row, Column, Shape) dup() pure nothrow{
-				return new typeof(return)(this.v);
+			/****************************************
+			 * Convert to string
+			 ****************************************/
+			override string toString(){
+				char[] buf;
+				buf.reserve(6u*Row*Column+(8u+2u*Row)*char.sizeof);
+				auto fmt = FormatSpec!char("%s");
+				this.toString((const(char)[] s){buf ~= s;}, fmt);
+				return trustedAssumeUnique(buf);
 			}
 
+			/// ditto
 			void toString(Writer, Char)(scope Writer w, FormatSpec!Char formatSpec)
 			if(isOutputRange!(Writer, const(Char)[])){
+				import std.array: array;
 				import std.format: formatValue;
 				import std.math: signbit;
-				import std.array: array;
 				import std.range: put, repeat;
 				import std.typecons: Tuple;
 
 			  immutable string LEFT_PAREN= "Matrix[";
 			  immutable string TAB= array('\x20'.repeat(LEFT_PAREN.length));
+				T num= void;
 				Tuple!(TypeOfIndex, "index", bool, "isZero") map;
 				w.put(LEFT_PAREN);
 				foreach(TypeOfSize i; 1u..Row+1u){
 					if(i > 1u) put(w, TAB);
 					w.put("[");
 					foreach(TypeOfSize j; 1u..Column+1u){
-						map= indexOfInternalArray!TmplArgsOfThis(MatrixPosition!(Row, Column)(i, j));
+						map= indexOfInternalArray!TemplateArgs(MatrixPosition!(Row, Column)(i, j));
 						if(map.isZero){
 							w.put("*");	// always zero
 						}
 					  else{
-							w.formatValue(v[map.index], formatSpec);
+							num= _values[map.index];
+							if(approxEqualZero(num)) w.put("≈0");
+							else w.formatValue(num, formatSpec);
 						}
 						if(j < Column) w.put(", ");
 					}
@@ -494,37 +456,27 @@ mixin template MatrixImpl(T, real Threshold){
 				}
 				w.put("]");
 			}
-
-			override string toString(){
-				char[] buf;
-				buf.reserve(6u*Row*Column+(8u+2u*Row)*char.sizeof);
-				auto fmt = FormatSpec!char("%s");
-				this.toString((const(char)[] s){buf ~= s;}, fmt);
-				return trustedAssumeUnique(buf);
-			}
 		}
 
-		/******************************************
-		 * Other common methods
-		 ******************************************/
+	  // Other common methods
 		@safe pure{
-			/************************
-			 * transpose
-			 ************************/
+			/****************************************
+			 * Transpose
+			 ****************************************/
 			Matrix!(Column, Row,
 							MatrixTypeOfTranspose!Shape,
-							MatOdr) transpose() nothrow @nogc const @property{
+							MatOdr) transpose() nothrow const @property{
 				import std.range: iota, zip;
-				enum TypeOfIndex LEN= arrayLength!(TmplArgsOfThis[0..3]);
+				enum TypeOfIndex LEN= arrayLength!(TemplateArgs[0..3]);
 				TypeOfInternalArray num= void;
-				auto idxSet= IndexSetTranspose!TmplArgsOfThis();
-				foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= this.v[idxSrc];
-				return typeof(return)(num, attr);
+				auto idxSet= IndexSetTranspose!TemplateArgs();
+				foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc];
+				return new typeof(return)(num);//, _attr);
 			}
 
-			/************************
+			/****************************************
 			 * Decomposition
-			 ************************/
+			 ****************************************/
 			void decompose(DecompScheme Scheme)()
 			if(isSquare || (!isSquare && Scheme is DecompScheme.singularValue)){
 				final switch(Scheme){
@@ -536,7 +488,7 @@ mixin template MatrixImpl(T, real Threshold){
 					break;
 				case DecompScheme.lup:
 					if(lup is null){
-						lup= LibLU.partialPivLU(this.v);
+						lup= LibLU.partialPivLU(this._values);
 					}
 					break;
 				case DecompScheme.lupq:
@@ -551,29 +503,27 @@ mixin template MatrixImpl(T, real Threshold){
 			}
 		}
 
-		/**************************
+		/******************************************
 		 * Decomposed matrix
-		 **************************/
+		 ******************************************/
 		auto decomposedMatrix(DecompScheme Scheme: DecompScheme.singularValue, DecomposedMat Mat)()
 		if(Mat is DecomposedMat.unitaryLeft ||
 			 Mat is DecomposedMat.diagonal ||
 			 Mat is DecomposedMat.unitaryRight){
 			static if(Mat is DecomposedMat.unitaryLeft){
-			  auto MatTmplParams= Tuple!(Row, Row, MatrixType.dense);
-				T[arrayLength!MatTmplParams] num;
-				auto matAttr= tuple!("isInvertible", "isUnitary")(Ternary.yes, Ternary.yes);
-				return new Matrix!(MatTmplParams)(num, matAttr);
+			  auto MatTmplParams= Tuple!(Row, Row, MatrixType.dense, MatOdr);
+				T[arrayLength!(MatTmplParams[0..3])] num;
+				return new Matrix!MatTmplParams(num);
 			}
 			else static if(Mat is DecomposedMat.diagonal){
-			  auto MatTmplParams= Tuple!(Row, Column, MatrixType.band1);
-				T[arrayLength!MatTmplParams] num;
+			  auto MatTmplParams= Tuple!(Row, Column, MatrixType.band1, MatOdr);
+				T[arrayLength!(MatTmplParams[0..3])] num;
 				return new Matrix!(MatTmplParams)(num);
 			}
 			else{
-			  auto MatTmplParams= Tuple!(Column, Column, MatrixType.dense);
-				T[arrayLength!MatTmplParams] num;
-				auto matAttr= tuple!("isInvertible", "isUnitary")(Ternary.yes, Ternary.yes);
-				return new Matrix!(MatTmplParams)(num, matAttr);
+			  auto MatTmplParams= Tuple!(Column, Column, MatrixType.dense, MatOdr);
+				T[arrayLength!(MatTmplParams[0..3])] num;
+				return new Matrix!(MatTmplParams)(num);
 			}
 		}
 
@@ -581,20 +531,18 @@ mixin template MatrixImpl(T, real Threshold){
 	  if(Mat is DecomposedMat.unitary ||
 			 Mat is DecomposedMat.upperTri){
 			static if(Mat is DecomposedMat.unitary){
-				return new Matrix!(Row, Column,
-													 MatrixType.dense
-													 )(num, tuple!("isInvertible",
-																				 "isUnitary")(Ternary.yes, Ternary.yes));
+				return new Matrix!(Row, Column, MatrixType.dense, MatOdr)(num);
 			}
 			else{
 				return new Matrix!(Row, Column, MatrixType.upperTri)(num);
 			}
 		}
 
-		/******************************************
-		 * Methods of square matrix
-		 ******************************************/
+		// Methods of square matrix
 		static if(isSquare){
+			/****************************************
+			 * get the decomposed matrix
+			 ****************************************/
 			auto decomposedMatrix(DecompScheme Scheme: DecompScheme.lup,
 														DecomposedMat Mat)() @safe pure nothrow const
 		  if(Mat is DecomposedMat.lowerTri ||
@@ -603,7 +551,7 @@ mixin template MatrixImpl(T, real Threshold){
 				static if(Mat is DecomposedMat.lowerTri){
 					enum MatrixType ShapeOfReturn= MatrixType.lowerTri;
 				}
-				else static if(Mat is DecomposedMat.UpperTri){
+				else static if(Mat is DecomposedMat.upperTri){
 					enum MatrixType ShapeOfReturn= MatrixType.upperTri;
 				}
 				else{
@@ -612,20 +560,20 @@ mixin template MatrixImpl(T, real Threshold){
 				return new Matrix!(Size, Size, ShapeOfReturn, MatOdr)(lup.matrix!Mat);
 			}
 
-			/************************
-			 * Trace
-			 ************************/
 			@property{
+				/**************************************
+				 * Trace
+				 **************************************/
 				T trace() @safe pure nothrow @nogc const{
 					import std.range: dropOne;
 					import numeric.pseudocmplx: assumeRealNum;
 					typeof(return) result= void;
 
 					if(ev is null){
-						result= v[0u];
+						result= _values[0];
 						static if(Size > 1u){
 							auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
-							foreach(TypeOfIndex idx; idxSet.dropOne) result += v[idx];
+							foreach(TypeOfIndex idx; idxSet.dropOne) result += _values[idx];
 						}
 					}
 					else{
@@ -635,12 +583,12 @@ mixin template MatrixImpl(T, real Threshold){
 					return result;
 				}
 
-				/************************
+				/**************************************
 				 * Determinant
-				 ************************/
+				 **************************************/
 				static if(Size < 4){
 					T det() @safe pure nothrow @nogc const{
-						if(attr.isInvertible is Ternary.no) return VALUE_ZERO;
+						if(_attr.isSingular) return VALUE_ZERO;
 						else return detImpl;
 					}
 				}
@@ -649,22 +597,24 @@ mixin template MatrixImpl(T, real Threshold){
 						import numeric.pseudocmplx: assumeRealNum;
 						typeof(return) result= void;
 
-						if(attr.isInvertible is Ternary.no) result= VALUE_ZERO;
+						if(_attr.isSingular){
+							result= VALUE_ZERO;
+						}
 						else{
-							if(ev is null) result= detImpl;	// if DIP 1008 is enable, @nogc 
-							else{
+						  if(ev){
 								static if(isComplex!T) result= ev.det;
 								else result= assumeRealNum!(CT, Threshold)(ev.det);
 							}
+							else result= detImpl;	// if DIP 1008 is enable, @nogc 
 						}
 
 						return result;
 					}
 				}
 
-				/************************
+				/**************************************
 				 * Inverse matrix
-				 ************************/
+				 **************************************/
 				typeof(this) inverse() @safe pure{
 				//if(!(flags & CHECK_SINGULARITY)) {}//checkSingularity(lup);	// fwelm or lup or ldu
 				//if(flags & TYP_INVERTIBLE){
@@ -676,9 +626,11 @@ mixin template MatrixImpl(T, real Threshold){
 				}
 			}
 
-			/++++++++++++++++++++++
-			 + Eigen value
-			 +++++++++++++++++++++/
+			/****************************************
+			 * Eigen value
+			 *
+			 * \Lambda= \lambda_1, \lambda_2, ..., \lambda_n
+			 ****************************************/
 			void findEigenValues() @safe @property{//@safe pure nothrow @property{
 				import std.stdio;	// DEBUG:
 				if(ev is null){
@@ -688,9 +640,27 @@ mixin template MatrixImpl(T, real Threshold){
 						break;
 					case MatrixType.dense:
 						static if(Size == 1u){
-							ev= new typeof(ev)(v);
+							ev= new typeof(ev)(_values);
 						}
 						else static if(Size == 2u){
+							/****************
+							 * 2×2 matrix
+							 *
+							 * \left\{
+							 * \begin{array}
+							 * 	trace(M)= \sum_J \lambda_i
+							 * 	det(M)= \pi_J \lambda_i
+							 * \end{array}
+							 * \right.
+							 *
+							 * index J= {j \in \mathbf{Z}| j= 1,~2,~\cdots,~n}
+							 *
+							 * trace(M)= \lambda_1 + \lambda_2
+							 * det(M)= \lambda_1 \lambda_2
+							 * \Lambda= ax^2+bx+c
+							 * \Lambda= \dfrac{-b \pm \sqrt{b^2-4ac}}{2*a}
+							 * a= 1, b= -trace(M), c= det(M)
+							 ****************/
 							import mathematic.equations: QuadraticEq;
 							auto eq= new QuadraticEq!(T, Threshold)(1.0, -trace, det);
 							ev= new typeof(ev)(eq.solve);
@@ -706,19 +676,19 @@ mixin template MatrixImpl(T, real Threshold){
 					case MatrixType.band1:
 						static if(is(T == RT)){
 							CT[Size] temp= void;
-							foreach(idx; 0u..Size) temp[idx]= complex!RT(v[idx]);
+							foreach(idx; 0u..Size) temp[idx]= complex!RT(_values[idx]);
 							ev= new typeof(ev)(temp);
 						}
-						else ev= new typeof(ev)(v);
+						else ev= new typeof(ev)(_values);
 						break;
 					case MatrixType.upperTri, MatrixType.lowerTri:
 						CT[Size] num= void;
-						auto idxSet= IndexSetDiag!TmplArgsOfThis();
+						auto idxSet= IndexSetDiag!TemplateArgs();
 						static if(is(T == RT)){
-							foreach(TypeOfIndex idx; idxSet) num[idx]= complex!RT(v[idx]);
+							foreach(TypeOfIndex idx; idxSet) num[idx]= complex!RT(_values[idx]);
 						}
 						else{
-							foreach(TypeOfIndex idx; idxSet) num[idx]= v[idx];
+							foreach(TypeOfIndex idx; idxSet) num[idx]= _values[idx];
 						}
 						ev= new typeof(ev)(num);
 					}
@@ -726,9 +696,9 @@ mixin template MatrixImpl(T, real Threshold){
 				else{}	// NOP: The eigen values have been already obtained
 			}
 
-			/++
-			 + eigen values
-			 +/
+			/****************************************
+			 * eigen values
+			 ****************************************/
 			CT[Size] eigenValues() @safe {//@safe pure nothrow @property{
 				if(ev is null) findEigenValues;
 				return ev.values;
@@ -736,8 +706,8 @@ mixin template MatrixImpl(T, real Threshold){
 		}	// end of block "static if(isSquare)"
 
 	package:
-		TypeOfInternalArray v;
-		Tuple!(Ternary, "isInvertible", Ternary, "isUnitary") attr;
+		TypeOfInternalArray _values;
+		TypeOfAttr _attr;
 		static if(isSquare){
 			enum LUdAlgorithm AlgoLU= LUdAlgorithm.doolittle;
 			Eigen!(CT, Threshold, Size) ev;
@@ -747,57 +717,54 @@ mixin template MatrixImpl(T, real Threshold){
 		static if(isSquare) LibLU.ArrayLUP lup;
 
   private:
-		void attrInitialize() @safe pure nothrow @nogc{
-			static if(isSquare){
-				attr.isInvertible= Ternary.unknown;
-				attr.isUnitary= Ternary.unknown;
+		pure const{
+			bool approxEqualZero(inout scope T num) @safe nothrow @nogc{
+				import numeric.approx: approxEqualZero;
+				return approxEqualZero!(T, Threshold)(num);
 			}
-			else{
-				attr.isInvertible= Ternary.no;
-				attr.isUnitary= Ternary.unknown;
-			}
-		}
 
-	  auto trustedAssumeUnique(U)(U t) @trusted pure nothrow @nogc const{
-			import std.exception: assumeUnique;
-			return assumeUnique(t);
-		}
+			auto trustedAssumeUnique(U)(U t) @trusted nothrow @nogc{
+				import std.exception: assumeUnique;
+				return assumeUnique(t);
+			}
 
 		// returns vector
-		T[Row] sliceColumn(in size_t col) @safe pure nothrow const
-		in(col >= 0u && col < Column){
-			typeof(return) temp= void;
+			T[Row] sliceColumn(IdxType)(in IdxType col) @safe nothrow @nogc
+			if(isIntegral!IdxType)
+		  in(col >= 0u && col < Column){
+			  typeof(return) temp= void;
 
-			final switch(Shape){
-			case MatrixType.zero:
-				temp[]= VALUE_ZERO;
-				break;
-			case MatrixType.dense:
-				final switch(MatOdr){
-				case MajorOrder.column:
-					uint st= Row*col;
-					temp[]= v[st .. st+Row];
+				final switch(Shape){
+				case MatrixType.zero:
+					temp[]= VALUE_ZERO;
 					break;
-				case MajorOrder.row, MajorOrder.diag:
+				case MatrixType.dense:
+					final switch(MatOdr){
+					case MajorOrder.column:
+						size_t st= Row*col;
+						temp[]= _aluesv[st .. st+Row];
+						break;
+					case MajorOrder.row:
+						foreach(i; 0u..Row) temp[i]= this.opIndex(i+1u, col+1u);
+					}
+					break;
+				case MatrixType.band1:
+					foreach(i; 0u..Row){
+						if(i == col) temp[i]= _values[i];
+						else temp[i]= VALUE_ZERO;
+					}
+					break;
+				case MatrixType.band3, MatrixType.upperTri, MatrixType.lowerTri:
 					foreach(i; 0u..Row) temp[i]= this.opIndex(i+1u, col+1u);
 				}
-				break;
-			case MatrixType.band1:
-				foreach(i; 0u..Row){
-					if(i == col) temp[i]= v[i];
-					else temp[i]= VALUE_ZERO;
-				}
-				break;
-			case MatrixType.band3, MatrixType.upperTri, MatrixType.lowerTri:
-				foreach(i; 0u..Row) temp[i]= this.opIndex(i+1u, col+1u);
-			}
-			return temp;
+				return temp;
+		  }
 		}
 	} // end of class "Matrix!(size, size, shape)"
 
-	/********************************************
-	 * Global functions
-	 ********************************************/
+	/************************************************************
+	 * tie four matrix to one
+	 ************************************************************/
 	Matrix!(RowUp+RowLw, ColumnL+ColumnR,
 					MatrixType.dense,
 					MatOdr) tie(TypeOfSize RowUp, TypeOfSize RowLw,
@@ -856,6 +823,6 @@ mixin template MatrixImpl(T, real Threshold){
 			foreach(j; 0u..ColumnR) num[Column*(RowUp+i)+ColumnL+j]= aryRB[i][j];
 		}
 
-		return typeof(return)(num);
+		return new typeof(return)(num);
 	}
 }

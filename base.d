@@ -324,8 +324,20 @@ in(idxColumn < Column, "Column index is out of bound."){
 		}
 		break;
 	case MatrixType.upperTri:
+		if(idxRow <= idxColumn){
+			result= true;
+		}
+		else{
+			result= false;
+		}
 		break;
 	case MatrixType.lowerTri:
+		if(idxRow >= idxColumn){
+			result= true;
+		}
+		else{
+			result= false;
+		}
 	}
 	return result;
 }

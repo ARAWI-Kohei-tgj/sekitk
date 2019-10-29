@@ -5,32 +5,21 @@ module sekitk.uppertri;
 
 import sekitk.base: TypeOfSize, MajorOrder;
 
+/+
 mixin template UpperTriangular(T, real Threshold,
-															 TypeOfSize Size,
-															 MajorOrder MatOdr)
+															 TypeOfSize Size, MajorOrder MatOdr)
 if(Size > 0){
++/
+enum string UPPER_TRI= q{
 	import std.algorithm: map;
-	import numeric.sekitk.qvm_base;
-	import numeric.sekitk.triangular: StrictTriImpl;
+	import std.range: dropOne;
+	import sekitk.base;
 
-	mixin StrictTriImpl!(T, Threshold, MatOdr);
-
-	/********************************************
-	 * Operators
-	 ********************************************/
+	// Operators
 	@safe pure nothrow const{
-	  // upperTri pm zero
-		Matrix!(Row, Column,
-						Shape,
-						MatOdr) opBinary(string Op,
-														 MatrixType ShapeR: MatrixType.zero
-														 )(in Matrix!(Row, Column, ShapeR, MatOdr) rhs)
-		if(isPlusOrMinusSign!Op){
-			pragma(msg, "uptri pm zero");
-			return new typeof(return)(this);
-		}
-
-		// upperTri pm band1
+		/******************************************
+		 * upperTri pm band1
+		 ******************************************/
 		Matrix!(Row, Column,
 						MatrixType.band1,
 						MatOdr) opBinary(string Op,
@@ -40,17 +29,17 @@ if(Size > 0){
 			enum MatrixType ShapeOfReturn= MatOpReturnType!(Op, Shape, ShapeR);
 			T[arrayLength!(Row, Column, ShapeOfReturn)] num;
 
-assert(ShapeOfReturn is MatrixType.band1);
-pragma(msg, "uptri pm diag");
 			TypeOfIndex j= 0u;
-			auto idxSet= IndexSetDiag!TmplArgsOfThis();
-			num= this.v[];
-			foreach(TypeOfIndex i; idxSet) mixin("num[i]" ~Op ~"= rhs.v[j++];");
+			auto idxSet= IndexSetDiag!TemplateArgs();
+			num= this._values[];
+			foreach(TypeOfIndex i; idxSet) mixin("num[i]" ~Op ~"= rhs._values[j++];");
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
-		// upperTri pm others
+	  /******************************************
+		 * upperTri pm others
+		 ******************************************/
 		Matrix!(Row, Column,
 						MatrixType.dense,
 						MatOdr) opBinary(string PM,
@@ -61,8 +50,6 @@ pragma(msg, "uptri pm diag");
 																ShapeR is MatrixType.lowerTri)){
 			enum MatrixType ShapeDest= MatOpReturnType!(Op, Shape, ShapeR);
 			T[arrayLength!(Row, Column, ShapeDest)] num;
-			assert(ShapeOfDest is MatrixType.dense);
-pragma(msg, "uptri pm dense or band3 or lowertri");
 
 			// lhs
 			{
@@ -74,29 +61,31 @@ pragma(msg, "uptri pm dense or band3 or lowertri");
 					TypeOfIndex j= 0u;
 					auto temp0= IndexSetDiag!(Row, Column, ShapeDest, MatOdr)();
 					auto temp1= IndexSetStrictTriR!(Size, ShapeDest, MatOdr)();
-					foreach(idx; merge(temp0, temp1)) num[idx]= this.v[j++];
+					foreach(idx; merge(temp0, temp1)) num[idx]= this._values[j++];
 				}
 			}
 			// rhs
 			static if(ShapeR is MatrixType.dense){
-				foreach(TypeOfIndex idx; 0u..(num.length)) mixin("num[idx]=" ~PM ~"rhs.v[idx];");
+				foreach(TypeOfIndex idx; 0u..(num.length)) mixin("num[idx]=" ~PM ~"rhs._values[idx];");
 			}
 			else static if(ShapeR is MatrixType.band3){
 				TypeOfIndex j= 0u;
 				auto temp0= IndexSetDiag!(Row, Column, MatrixType.dense, MatOdr)();
 				auto temp1= IndexSetSubDiag!(Size, MatrixType.dense, MatOdr)();
-				foreach(idx; merge(temp0, temp1)) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; merge(temp0, temp1)) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 			else{	// LowerTri
 				TypeOfIndex j= 0u;
 				auto temp= IndexSetStrictTriL!(Size, ShapeDest, MatOdr)();
-				foreach(idx; temp) mixin("num[idx]= " ~PM ~"rhs.v[j++];");
+				foreach(idx; temp) mixin("num[idx]= " ~PM ~"rhs._values[j++];");
 			}
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
-		// upperTri * band1
+		/******************************************
+		 * upperTri * band1
+		 ******************************************/
 		Matrix!(Row, ColumnR,
 						Shape,
 						MatOdr) opBinary(string Op: "*",
@@ -110,15 +99,18 @@ pragma(msg, "uptri pm dense or band3 or lowertri");
 		  auto idxSet= IndexSetDiag!(Size, Size, Shape, MatOdr)();
 
 			foreach(i; 0u..Size){
-				elmLhs= v[idxSet.front .. idxSet.front+Size-i].dup;
+				elmLhs= _values[idxSet.front .. idxSet.front+Size-i].dup;
 				idxSet.popFront;
-				elmRhs= v[i..$].dup;
+				elmRhs= _values[i..$].dup;
 				foreach(numL, numR; zip(elmLhs, elmRhs)) num[k++]= numL+numR;
 			}
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
+		/******************************************
+		 * uptri mul other
+		 ******************************************/
 		Matrix!(Row, ColumnR,
 						MatOpReturnType!(Op, Shape, ShapeR),
 						MatOdr) opBinary(string Op: "*",
@@ -137,8 +129,8 @@ pragma(msg, "uptri pm dense or band3 or lowertri");
 					foreach(j; iota!TypeOfSize(ColumnR)){
 						idxPrd= idxMapDest(i, j);
 						idxRhs= (Column-1u)*ColumnR+j;
-						num[idxPrd]= this.v[idxLhs]*rhs.v[idxRhs];
-						foreach(k; 1u..Column-i) num[idxPrd] += this.v[idxLhs-k]*rhs.v[idxRhs-k*ColumnR];
+						num[idxPrd]= this._values[idxLhs]*rhs._values[idxRhs];
+						foreach(k; 1u..Column-i) num[idxPrd] += this._values[idxLhs-k]*rhs._values[idxRhs-k*ColumnR];
 					}
 					idxLhs += Column-(i+1u);
 				}
@@ -152,8 +144,8 @@ pragma(msg, "uptri pm dense or band3 or lowertri");
 					foreach(j; 0u..ColumnR-i){
 						idxPrd= idxsetLhs[j]+i;
 						idxLhs= idxsetLhs[j];
-						num[idxPrd]= this.v[idxLhs]*rhs.v[idxLhs+i];
-						foreach(k; 1u..i+1u) num[idxPrd] += this.v[idxLhs+k]*rhs.v[idxsetRhs[j+k]+(i-1u)-(k-1u)];
+						num[idxPrd]= this._values[idxLhs]*rhs._values[idxLhs+i];
+						foreach(k; 1u..i+1u) num[idxPrd] += this._values[idxLhs+k]*rhs._values[idxsetRhs[j+k]+(i-1u)-(k-1u)];
 					}
 				}
 				break;
@@ -209,7 +201,7 @@ c24=                              a14*b14
 			  assert(false);
 			}
 
-			return typeof(return)(num);
+			return new typeof(return)(num);
 		}
 
 		unittest{
@@ -244,7 +236,7 @@ c24=                              a14*b14
 																			10346, 8952,
 																			4687, 4033];
 				auto mul= lhsUptri*rhsDense;
-				assert(mul.v[] == result[]);
+				assert(mul._values[] == result[]);
 			}
 
 			// upper triangular * diagonal
@@ -257,7 +249,7 @@ c24=                              a14*b14
 																			1261, 988,
 																			327];
 				auto mul= lhsUptri*rhsUptri;
-				assert(mul.v[] == result[]);
+				assert(mul._values[] == result[]);
 			}
 
 			// upper triangular * lower triangular
@@ -265,10 +257,10 @@ c24=                              a14*b14
 	}
 
 private:
-	@safe pure nothrow const{
-		/++
-		 + dense
-		 +/
+	@safe pure nothrow @nogc const{
+		/******************************************
+		 * Generating the converting array of upper triangular to dense
+		 ******************************************/
 		T[arrayLength!(Row, Column, MatrixType.dense)] arrayDense(){
 			import std.algorithm: merge;
 
@@ -281,39 +273,40 @@ private:
 				TypeOfIndex j= 0u;
 				auto temp0= IndexSetDiag!(Row, Column, MatrixType.dense, MatOdr)();
 				auto temp1= IndexSetStrictTriR!(Size, MatrixType.dense, MatOdr)();
-				foreach(idx; merge(temp0, temp1)) num[idx]= this.v[j++];
+				foreach(idx; merge(temp0, temp1)) num[idx]= this._values[j++];
 			}
 
 			return num;
 		}
 
-		/++++++++++++++
-		 + determinant
-		 +++++++++++++/
-		T detImpl() @nogc{
-			typeof(return) result= v[0];
-			foreach(num; v[1u..$]) result *= num;
+		/******************************************
+		 * determinant
+		 ******************************************/
+		T detImpl(){
+			typeof(return) result= _values[0];
+			auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
+			foreach(TypeOfIndex idx; idxSet.dropOne) result *= _values[idx];
 			return result;
 		}
 
-		/++
-		 +
-		 ++/
-		T[arrayLength!(Size, Size, MatrixType.upperTri)] inverseImpl() @nogc{
-			typeof(return) num= void;
+		/******************************************
+		 * Internal array of inverse matrix
+		 ******************************************/
+		TypeOfInternalArray inverseImpl(){
+			typeof(return) result= void;
 
-			static if(Size == 1u){
-				num= [Identity!(T, "*")/v[0]];
+			static if(Size == 1){
+				result= [Identity!(T, "*")/_values[0]].idup;
 			}
-			else static if(Size == 2u){
-				num= [v[2], -v[1], v[0]];
-				num[] /= this.det;
+			else static if(Size == 2){
+				result= [_values[2], -_values[1], _values[0]];
+				result[] /= this.det;
 			}
 			else static if(Size == 3u){
-				num= [v[3]*v[5], -v[1]*v[5], v[1]*v[4]-v[2]*v[3],
-							v[0]*v[5], -v[0]*v[4],
-							v[0]*v[3]];
-				num[] /= this.det;
+				result= [_values[3]*_values[5], -_values[1]*_values[5], _values[1]*_values[4]-_values[2]*_values[3],
+								 _values[0]*_values[5], -_values[0]*_values[4],
+								 _values[0]*_values[3]];
+			  result[] /= this.det;
 			}
 			else{
 				assert(false, "not be implemented");
@@ -340,7 +333,7 @@ private:
 				+/
 			}
 
-			return num;
+			return result;
 		}
 	}
-}
+};

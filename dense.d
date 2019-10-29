@@ -8,8 +8,11 @@ import sekitk.base: TypeOfSize, MajorOrder;
 /**************************************************************
  * common methods of dense matrix both rectangular and square
  **************************************************************/
+/+
 mixin template DenseCommon(T, TypeOfSize Row, TypeOfSize Column, MajorOrder MatOdr)
 if(Row > 0 && Column > 0){
++/
+enum string DENSE_COMMON= q{
 	import std.traits: Unqual, ParameterTypeTuple;
 	import std.array: array;
 	import std.range: repeat, iota, zip;
@@ -27,11 +30,11 @@ private:
 		TypeOfThis opBinary(string Op,
 												MatrixType ShapeR: MatrixType.band1
 												)(in Matrix!(Row, Column,
-																		 ShapeR, MatOdr) rhs) @nogc
+																		 ShapeR, MatOdr) rhs)
 		if(isPlusOrMinusSign!Op){
-		  TypeOfInternalArray num= this.v[];
+		  TypeOfInternalArray num= this._values[];
 			TypeOfIndex j= 0u;
-			auto idxSet= IndexSetDiag!TmplArgsOfThis();
+			auto idxSet= IndexSetDiag!TemplateArgs();
 			foreach(i; idxSet) mixin("num[i] " ~PM ~"= rhs.v[j++];");
 
 			return new typeof(return)(num);
@@ -41,25 +44,25 @@ private:
 		TypeOfThis opBinary(string Op,
 												MatrixType ShapeR
 												)(in Matrix!(Row, Column,
-																		 ShapeR, MatOdr) rhs) @nogc
+																		 ShapeR, MatOdr) rhs)
 		if(isPlusOrMinusSign!Op && ShapeR != Shape){
 			import std.algorithm: merge;
-			TypeOfInternalArray num= this.v[];
+			TypeOfInternalArray num= this._values[];
 			TypeOfIndex j= 0u;
 
-			auto idxSet0= IndexSetDiag!TmplArgsOfThis();
+			auto idxSet0= IndexSetDiag!TemplateArgs();
 
 			static if(ShapeR is MatrixType.band3){
 				auto idxSet1= IndexSetSubDiag!(Size, Shape, MatOdr)();
-				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 			else static if(ShapeR is MatrixType.upperTri){
 				auto idxSet1= IndexSetStrictTriR!(Size, Shape, MatOdr)();
-				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 			else static if(ShapeR is MatrixType.lowerTri){
 				auto idxSet1= IndexSetStrictTriL!(Size, Shape, MatOdr)();
-				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs.v[j++];");
+				foreach(idx; merge(idxSet0, idxSet1)) mixin("num[idx] " ~PM ~"= rhs._values[j++];");
 			}
 			else{
 				assert(false);
@@ -70,31 +73,31 @@ private:
 
 		// matrix multiplications
 		Matrix!(Row, ColumnR,
-						MatOpReturnType!(Op, Shape, ShapeR, MatOdr)
-						) opBinary(string Op: "*",
-											 TypeOfSize ColumnR,
-											 MatrixType ShapeR)(in Matrix!(Column, ColumnR,
-																										 ShapeR, MatOdr) rhs) @nogc{
-			enum TypeOfIndex LEN= arrayLength!(Row, ColumnR, MatOpReturnType!(OP, Shape, ShapeR));
+						MatOpReturnType!(Op, Shape, ShapeR),
+						MatOdr) opBinary(string Op: "*",
+														 TypeOfSize ColumnR,
+														 MatrixType ShapeR)(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs)
+	  if(ShapeR !is MatrixType.zero){
+			enum TypeOfIndex LEN= arrayLength!(Row, ColumnR, MatOpReturnType!(Op, Shape, ShapeR));
 			T[LEN] num= void;
 
 			final switch(ShapeR){
 			case MatrixType.dense:
-				alias idxMapDest= indexMap!(templateArgsOf!(typeof(return)));
-				alias idxMapLhs= indexMap!TmplArgsOfThis;
-				alias idxMapRhs= indexMap!(templateArgsOf!(typeof(rhs)));
+				alias idxMapDest= indexMap!(TemplateArgsOf!(typeof(return)));
+				alias idxMapLhs= indexMap!TemplateArgs;
+				alias idxMapRhs= indexMap!(TemplateArgsOf!(typeof(rhs)));
 				foreach(i; 0u..Row)
 					foreach(j; 0u..ColumnR){{
-						num[idxMapDest(i, j)]= this.v[idxMapLhs(i, 0u)] * rhs.v[idxMapRhs(j, 0u)];
-						foreach(k; 1u..Column) num[idxMapDest(i, j)] += this.v[idxMapLhs(i, k)]*rhs.v[idxMapRhs(k, j)];
+						num[idxMapDest(i, j)]= this._values[idxMapLhs(i, 0u)]*rhs._values[idxMapRhs(j, 0u)];
+						foreach(k; 1u..Column) num[idxMapDest(i, j)] += this._values[idxMapLhs(i, k)]*rhs._values[idxMapRhs(k, j)];
 					}}
 				break;
 			case MatrixType.band1:
-				alias idxMapLhs= indexMap!TmplArgsOfThis;
+				alias idxMapLhs= indexMap!TemplateArgs;
 				TypeOfIndex k= 0u;
 				foreach(i; 0u..Row)
 					foreach(j; 0u..Column){{
-					  num[k++]= this.v[idxMapLhs(i, j)]*rhs.v[j];
+					  num[k++]= this._values[idxMapLhs(i, j)]*rhs._values[j];
 			  }}
 				break;
 			case MatrixType.band3:
@@ -104,8 +107,8 @@ private:
 					idxRhs= 0u;
 					foreach(j; 0u..ColumnR){
 						en= (j == 0u || j == ColumnR-1u)? 2u : 3u;
-						num[idxPrd]= this.v[idxLhs]*rhs.v[idxRhs];
-						foreach(k; 1u..en) num[idxPrd] += this.v[idxLhs+k]*rhs.v[idxRhs+2u*k];
+						num[idxPrd]= this._values[idxLhs]*rhs._values[idxRhs];
+						foreach(k; 1u..en) num[idxPrd] += this._values[idxLhs+k]*rhs._values[idxRhs+2u*k];
 						++idxPrd;
 						if(j == 0u){
 							idxRhs += 1u;
@@ -119,14 +122,14 @@ private:
 				break;
 			case MatrixType.upperTri:
 				size_t temp= void;
-				alias idxMapDest= indexMap!(templateArgsOf!(typeof(return)));
-				alias idxMapLhs= indexMap!TmplArgsOfThis;
+				alias idxMapDest= indexMap!(TemplateArgsOf!(typeof(return)));
+				alias idxMapLhs= indexMap!TemplateArgs;
 				foreach(i; iota!TypeOfSize(ColumnR)){
 					foreach(j; iota!TypeOfSize(Row)){
-						num[idxMapDest(j, i)]= this.v[idxMapLhs(j, 0u)]*rhs.v[i];
+						num[idxMapDest(j, i)]= this._values[idxMapLhs(j, 0u)]*rhs._values[i];
 						temp= 0u;
 						foreach(k; 1u..i+1u){
-							num[idxMapDest(j, i)] += this.v[idxMapLhs(j, k)]*rhs.v[i-1u+ColumnR+temp];
+							num[idxMapDest(j, i)] += this._values[idxMapLhs(j, k)]*rhs._values[i-1u+ColumnR+temp];
 							temp += ColumnR-(k+1);
 						}
 					}
@@ -144,8 +147,8 @@ private:
 					foreach(j; 0u..Row){
 						idxPrd= j*ColumnR+i;
 						idxRhs= indexRhs(i, ColumnR-1u);
-						num[idxPrd]= this.v[Column*(j+1u)-1u]*rhs.v[idxRhs];
-						foreach_reverse(k; i..ColumnR-1u) num[idxPrd] += this.v[j*Column+k]*rhs.v[indexRhs(i, k)];
+						num[idxPrd]= this._values[Column*(j+1u)-1u]*rhs._values[idxRhs];
+						foreach_reverse(k; i..ColumnR-1u) num[idxPrd] += this._values[j*Column+k]*rhs._values[indexRhs(i, k)];
 					}
 				}
 				break;
@@ -247,16 +250,32 @@ private:
 	}
 
   const{
+		/**
+		 * ---
+		 * auto mat= new Matrix!(2, 3, MatrixType.dense, MajorOrder.row);
+		 * foreach(T elm; mat) ...;
+		 * ---
+		 *
+		 * FIXME
+		 */
 		int opApply(Dg)(scope Dg dg)
 		if(ParameterTypeTuple!Dg.length == 1){
 			typeof(return) result= 0;
 
-			foreach(elm; v){
+			foreach(elm; _values){
 				result= dg(elm);
 			}
 			return result;
 		}
 
+		/**
+		 * ---
+		 * auto mat= new Matrix!(2, 3, MatrixType.dense, MajorOrder.row);
+		 * foreach(Vector!2 vec; mat) ...;
+		 * ---
+		 *
+		 * FIXME
+		 */
 		int opApply(Dg)(scope Dg dg)
 		if(ParameterTypeTuple!Dg.length == 1){
 			typeof(return) result= 0;
@@ -267,65 +286,56 @@ private:
 			return result;
 		}
 	}
-}
+};
 
 
 /*************************************************************
  * Rectangular dense matrix
  *************************************************************/
+/+
 mixin template RectDense(T, real Threshold,
 												 TypeOfSize Row,
 												 TypeOfSize Column,
 												 MajorOrder MatOdr)
 if(Row > 0 && Column > 0){
-	mixin DenseCommon!(T, Row, Column, MatOdr);
++/
+enum string RECT_DENSE= q{
+	mixin(DENSE_COMMON);
 
 	version(future){
 		void pseudoInverse(){};
 	}
-}
+};
 
 
 /*************************************************************
  * Square dense matrix
  *************************************************************/
-mixin template SqDense(T, real Threshold, TypeOfSize Size, MajorOrder MatOdr)
-if(Size > 0){
-	mixin DenseCommon!(T, Size, Size, MatOdr);
+//mixin template SqDense(T, real Threshold, TypeOfSize Size, MajorOrder MatOdr)
+//if(Size > 0){
+enum string SQ_DENSE= q{
+	mixin(DENSE_COMMON);
 
 private:
-	/****************************
+	/********************************************
 	 * determinant
-	 ****************************/
-	static if(Size == 1){
-		T detImpl() @safe pure nothrow @nogc const{return v[0];}
-	}
-	else static if(Size == 2){
-		/// ditto
-		/// Standars: rule of Sarrus
+	 ********************************************/
+	static if(Size < 4){
 		T detImpl() @safe pure nothrow @nogc const{
-			typeof(return) result;
-
-			final switch(MatOdr){
-			case MajorOrder.row, MajorOrder.column:
-				result= v[0]*v[3]-v[1]*v[2];
-				break;
-			case MajorOrder.diag:
-				result= v[0]*v[1]-v[2]*v[3];
+			typeof(return) result= void;
+			static if(Size == 1){
+				result= _values[0];
 			}
-
-			return result;
-		}
-	}
-	else static if(Size == 3){
-		/// ditto
-		/// Standards: rule of Sarrus
-		T detImpl() @safe pure nothrow @nogc const{
-			typeof(return) result;
-
-			result= v[0]*(v[4]*v[8]-v[5]*v[7])
-				+v[1]*(v[5]*v[6]-v[3]*v[8]) +v[2]*(v[3]*v[7]-v[4]*v[6]);
-
+			else static if(Size == 2){
+				/// Standars: rule of Sarrus
+				result= _values[0]*_values[3] -_values[1]*_values[2];
+			}
+			else{
+				/// Standards: rule of Sarrus
+				result= _values[0]*(_values[4]*_values[8] -_values[5]*_values[7])
+					+_values[1]*(_values[5]*_values[6]-_values[3]*_values[8])
+					+_values[2]*(_values[3]*_values[7]-_values[4]*_values[6]);
+			}
 			return result;
 		}
 	}
@@ -341,7 +351,7 @@ private:
 			}
 			else if(lup !is null) result= lup.det;	// LU decomposition is obtained
 			else{
-				auto temp= LUdecomposition!(T, Threshold, Size, Shape, AlgoLU, MatOdr).forwardElimination(this.opCast!(T[Column][Row])());	// forward elimination
+				auto temp= LibLU.forwardElimination(this.opCast!(T[Column][Row])());	// forward elimination
 				// if DIP 1008 is enable, @nogc
 				result= temp.det;
 			}
@@ -350,27 +360,18 @@ private:
 		}
 	}
 
-	/****************************
+	/********************************************
 	 * inverse
-	 ****************************/
-	static if(Size < 3){
+	 ********************************************/
+	static if(Size == 1){
 		TypeOfInternalArray inverseImpl() @safe pure nothrow @nogc const{
-			typeof(return) result= void;
-
-			static if(Size == 1){
-			  result= [Identity!(T, "*")/v[0]];
-			}
-			else{
-				final switch(MatOdr){
-				case MajorOrder.row, MajorOrder.column:
-					result= [v[3], -v[1], -v[2], v[0]];
-					break;
-				case MajorOrder.diag:
-					result= [v[1], v[0], -v[2], -v[3]];
-				}
-				result[] /= this.detImpl;
-			}
-			
+			return [Identity!(T, "*")/_values[0]];
+		}
+	}
+	else static if(Size == 2){
+		TypeOfInternalArray inverseImpl() @safe pure nothrow @nogc const{
+			typeof(return) result= [_values[3], -_values[1], -_values[2], _values[0]];
+			result[] /= this.detImpl;
 			return result;
 		}
 	}
@@ -399,4 +400,4 @@ l21*u11= a21
 l21*u12+u22= a22
 u22= a22-a21*a12/a11
 +/
-}
+};

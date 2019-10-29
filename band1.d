@@ -4,21 +4,21 @@
 module sekitk.band1;
 
 import sekitk.base: TypeOfSize, MajorOrder;
-
+/+
 mixin template Band1(T, real Thresold, TypeOfSize Size, MajorOrder MatOdr)
 if(Size > 1u){
+	+/
+enum string BAND1_IMPL= q{
 	import std.traits: Unqual;
 	import sekitk.base;
 	import sekitk.indexset: IndexSetDiag;
 
 public:
-	/******************************
-	 * Operators
-	 *****************************/
+	// Operators
 	@safe pure nothrow const{
-		/++++++++++++++++++++++
-		 + add & sub operator
-		 +++++++++++++++++++++/
+		/******************************************
+		 * Matrix ± Matrix
+		 ******************************************/
 		Matrix!(Size, Size,
 						ShapeR, MatOdr) opBinary(string Op,
 																		 MatrixType ShapeR)(in Matrix!(Size, Size,
@@ -27,46 +27,47 @@ public:
 			return mixin("rhs" ~Op ~"this;");
 		}
 
-		/++++++++++++++++++++++
-		 + matrix multiplications
-		 +++++++++++++++++++++/
+		/******************************************
+		 * Matrix * Matrix
+		 ******************************************/
 		Matrix!(Row, ColumnR,
 						ShapeR, MatOdr) opBinary(string OP: "*",
 																		 TypeOfSize ColumnR,
 																		 MatrixType ShapeR)(in Matrix!(Column, ColumnR,
 																																	 ShapeR, MatOdr) rhs) @nogc
-		if(ShapeR is MatrixType.dense && ColumnR > 0u ||
-			 (ShapeR is MatrixType.band1 || ShapeR == MatrixType.band3 ||
-				ShapeR is MatrixType.upperTri || ShapeR == MatrixType.lowerTri) &&
-			 ColumnR == Column){
+			if(ShapeR !is MatrixType.zero &&
+				 templateOr(ShapeR is MatrixType.dense && ColumnR > 0u,
+										(ShapeR is MatrixType.band1 || ShapeR == MatrixType.band3 ||
+										 ShapeR is MatrixType.upperTri || ShapeR == MatrixType.lowerTri) &&
+										ColumnR == Column)){
 			T[arrayLength!(Row, ColumnR, ShapeR)] num= void;
 
 			final switch(ShapeR){
 			case MatrixType.zero:
-				break;
+			  assert(false);
 			case MatrixType.dense:
 				size_t st= 0u, en= void;
 				foreach(i; 0u..Row){
 					en= (i+1)*ColumnR;
-					num[st..en]= rhs.v[st..en]*this.v[i];
+					num[st..en]= rhs._values[st..en]*this._values[i];
 					st= en;
 				}
 				break;
 			case MatrixType.band1:
-				num[]= this.v[]*rhs.v[];
+				num[]= this._values[]*rhs._values[];
 				break;
 			case MatrixType.band3:
 				size_t st= 0u, en= void;
 				foreach(i; 0u..Row){
 					en= 3u*i +(i < Row-1u)? 2u : 1u;
-					num[st..en]= rhs.v[st..en]*v[i];
+					num[st..en]= rhs._values[st..en]*_values[i];
 					st= en;
 				}
 				break;
 			case MatrixType.upperTri:
 				size_t st= 0u, en= ColumnR;
 				foreach(i; 0u..Row){
-					num[st..en]= rhs.v[st..en]*this.v[i];
+					num[st..en]= rhs._values[st..en]*this._values[i];
 					st= en;
 					en += (ColumnR-(i+1u));
 				}
@@ -74,7 +75,7 @@ public:
 			case MatrixType.lowerTri:
 				size_t st= 0u, en= 1u;
 				foreach(i; 0u..Row){
-					num[st..en]= rhs.v[st..en]*this.v[i];
+					num[st..en]= rhs._values[st..en]*this._values[i];
 					st= en;
 					en += i+2u;
 				}
@@ -82,9 +83,9 @@ public:
 			return new typeof(return)(num);
 		}
 
-		/++++++++++++++++++++++
-		 + power
-		 +++++++++++++++++++++/
+		/******************************************
+		 * power
+		 ******************************************/
 		Matrix!(Row, Column,
 						MatrixType.band1,
 						MatOdr) opBinary(string Pow: "^^", N)(in N rhs) @nogc
@@ -95,15 +96,15 @@ public:
 			}
 			else{
 				T[arrayLength!(Row, Column, MatrixType.band1)] num;
-				num[]= this.v[]^^rhs;
+				num[]= this._values[]^^rhs;
 				result= new typeof(return)(num);
 			}
 			return result;
 		}
 
-		/++++++++++++++++++++++
-		 + cast
-		 +++++++++++++++++++++/
+		/******************************************
+		 * cast
+		 ******************************************/
 	  Matrix!(Row, Column,
 						ShapeDest,
 						MatOdrDest) opCast(MatrixType ShapeDest,
@@ -127,22 +128,8 @@ public:
 			{
 				auto idxset= IndexSetDiag!(Row, Column, ShapeDest, MatOdrDest)();
 				size_t j= 0u;
-				foreach(i; idxset) num[i]= this.v[j++];
+				foreach(i; idxset) num[i]= this._values[j++];
 			}
-			return new typeof(return)(num);
-		}
-	}
-
-	/******************************
-	 * Other methods
-	 *****************************/
-	@safe pure nothrow const{
-		// transpose
-		Matrix!(Column, Row, Shape, MatOdr) transposed() @nogc @property{
-			T[arrayLength!(Column, Row, Shape)] num= void;
-			static if(isFloatingPoint!T) import numeric.pseudocmplx: conj;
-
-			foreach(idx; 0u..Size) num[idx]= v[idx].conj;
 			return new typeof(return)(num);
 		}
 	}
@@ -158,7 +145,7 @@ private:
 			typeof(return) temp= VALUE_ZERO;
 			size_t j= 0u;
 		  auto idxSet= IndexSetDiag!(Size, Size, MatrixType.dense, MatOdr)();
-			foreach(TypeOfIndex i; idxSet) temp[i]= this.v[j++];
+			foreach(TypeOfIndex i; idxSet) temp[i]= this._values[j++];
 			return temp;
 		}
 
@@ -166,8 +153,8 @@ private:
 		 +
 		 +++/
 		T detImpl() @nogc{
-			typeof(return) result= v[0];
-			foreach(num; v[1u..$]) result *= num;
+			typeof(return) result= _values[0];
+			foreach(num; _values[1u..$]) result *= num;
 			return result;
 		}
 
@@ -175,9 +162,9 @@ private:
 		 +
 		 +++/
 	  TypeOfInternalArray inverseImpl() @nogc{
-			typeof(return) num= v[];
+			typeof(return) num= _values[];
 			num[]= 1.0/num[];
 			return num;
 		}
 	}
-}
+};

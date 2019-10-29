@@ -37,9 +37,7 @@ template LUdecomposition(T, real Threshold,
 												 LUdAlgorithm Scheme,
 												 MajorOrder MatOdr)
 if(isFloatingPoint!T || isComplex!T){
-	/********************************************
-	 * class
-	 ********************************************/
+  /// class
 	class ArrayLUP{
 		@safe pure nothrow @nogc{
 			this(){}
@@ -49,18 +47,20 @@ if(isFloatingPoint!T || isComplex!T){
 			}
 		}
 
-		/**************************
-		 * Methods
-		 **************************/
+	  // Methods
 		@safe pure nothrow @nogc const{
+			/**
+			 * Returns:
+			 *	true if invertible
+			 */
 			bool isInvertible() @property{
 				return approxEqualZero!(T, Threshold)(lu)? false: true;
 			}
 
-		  // determinant
+		  /// determinant
 			alias det= lu;
 
-			// inverse
+			/// inverse
 			T inverseArray() @property{
 				return Identity!(T, "*")/lu;
 			}
@@ -75,41 +75,73 @@ template LUdecomposition(T, real Threshold,
 												 TypeOfSize Size, MatrixType Shape,
 												 LUdAlgorithm Scheme, MajorOrder MatOdr)
 if((isFloatingPoint!T || isComplex!T) && Size > 1){
-	/*********************************************
-	 * Structure
-	 *********************************************/
+	import std.algorithm: merge;
+	import std.range: iota, zip;
+	import sekitk.indexset: IndexSetDiag, IndexSetStrictTriR;
 	enum T VALUE_ZERO= T(0.0L);
-	/+++++++++++++++++++++++++++
-	 + struct FwElimArray
-	 +++++++++++++++++++++++++++/
+
+	/********************************************
+	 * This class stores the result of the forward elimination
+	 ********************************************/
 	struct ResultOfFwElim{
-		this(in T[Size][Size] matUpTri, in ubyte permCounter, in ubyte step) @safe pure nothrow @nogc{
+		/**************************
+		 * Params:
+		 *	matUpTri= result of foreard elimination
+		 *	permCounter= number of the permutation in forward elimination
+		 *	step= number of the elimination steps
+		 **************************/
+		this(in T[Size][Size] matUpTri,
+				 in ubyte permCounter, in ubyte step) @safe pure nothrow @nogc{
 			_rank= step;
 			perm= permCounter;
-			size_t st= 0u, en= void;
-			foreach(i; 0..Size){
-				en= st+Size-i;
-				buf[st..en]= matUpTri[i][i..Size];
-		 		st= en;
+
+			T[arrayLength!(Size, Size, MatrixType.dense)] temp= void;
+			{
+				size_t st, en= 0u;
+				foreach(i; 0u..Size){
+					st= en;
+					en += Size;
+					temp[st..en]= matUpTri[i][];
+				}
 			}
+
+			auto idxSetSrc= (){
+				auto idxSet0= IndexSetDiag!(Size, Size, Shape, MatOdr)();
+				auto idxSet1= IndexSetStrictTriR!(Size, Shape, MatOdr)();
+				return merge(idxSet0, idxSet1);
+			}();
+			auto idxSetDest= iota!TypeOfIndex(0u, arrayLength!(Size, Size, MatrixType.upperTri));
+			foreach(idxDest, idxSrc; zip(idxSetDest, idxSetSrc)) _values[idxDest]= temp[idxSrc];
 		}
 
 		@property @safe pure nothrow @nogc const{
-			auto arrayUpperTri(){return buf;}
+			/************************
+			 * Returns:
+			 *	Raw data of forward elimination
+			 ************************/
+			auto arrayUpperTri(){return _values;}
 
-			uint rank(){return _rank;}
+			/************************
+			 * Returns:
+			 *	Rank of the source matrix
+			 ************************/
+			uint rank() @property{return _rank;}
+
+			///
 			uint numberOfPermutation(){return perm;}
 
-			T det(){
-				T result;
+			/************************
+			 * Returns:
+			 *	determinant
+			 ************************/
+			T det() @property{
+				import std.range: dropOne;
+				T result= void;
 				if(_rank < Size) result= VALUE_ZERO;	// singular matrix
 				else{
-					TypeOfIndex j= 0u;
-					result= buf[j];
-					foreach(i; 1u..Size){
-						j += Size-(i-1u);
-						result *= buf[j];
-					}
+					auto idxSet= IndexSetDiag!(Size, Size, MatrixType.upperTri, MatOdr)();
+					result= _values[0];
+					foreach(TypeOfIndex idx; idxSet.dropOne) result *= _values[idx];
 					if(perm%2 != 0) result= -result;
 				}
 				return result;
@@ -117,26 +149,24 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 		}
 
 	private:
-		T[arrayLength!(Size, Size, MatrixType.upperTri)] buf;
+		T[arrayLength!(Size, Size, MatrixType.upperTri)] _values;
 		ubyte _rank;
 		ubyte perm;
 	}
 
-	/*********************************************
+	/********************************************
 	 * class ArrayLUP
-	 *********************************************/
+	 ********************************************/
   class ArrayLUP{
-		/**************************
-		 * Constructors
-		 **************************/
+	  // Constructors
 		@safe pure nothrow{
-			// default constructor
+			/// default constructor
 			this() @nogc{
 			  invertible= false;
 				counterEx= 0;
 			}
 
-			// copy constructor
+			/// copy constructor
 			this(in typeof(this) other){
 				this.invertible= other.invertible;
 				this.lu[]= other.lu[];
@@ -144,8 +174,14 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 			  this.counterEx= other.counterEx;
 			}
 
-			// normal constructor
-			this(in bool isInvertible, in T[Size][Size] mat, in ubyte[Size] perm, in ubyte ex){
+			/************************
+			 * Params:
+			 *	isInvertible= 
+			 *	mat= 
+			 *	perm= number of the permutation
+			 *	ex= 
+			 ************************/
+			this(in bool isInvertible, in T[Size][Size] mat, in ubyte[Size] perm, in TypeOfSize ex){
 				invertible= isInvertible;
 			  foreach(TypeOfSize i; 0u..Size)
 				  foreach(TypeOfSize j; 0u..Size){{
@@ -156,10 +192,11 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 			}
 		}
 
-		/**************************
-		 * Other methods
-		 **************************/
+		// Other methods
 		@safe pure nothrow const{
+			/**
+			 * 
+			 **/
 			bool isInvertible() @nogc @property{return invertible;}
 
 			T[arrayLength!(Size, Size, MatrixType.lowerTri)] matrix(DecomposedMat Mat: DecomposedMat.lowerTri)() @nogc{
@@ -265,9 +302,7 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 		bool invertible;
 	}
 
-	/************************************************************
-	 * Functions
-	 ************************************************************/
+  // Functions
 	/********************************************
 	 * Function forwardElimination
 	 *
@@ -280,7 +315,7 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 	 *  struct "ResultOfFwElim" as the result
 	 ********************************************/
 	ResultOfFwElim forwardElimination(in T[Size][Size] mat) @safe pure nothrow @nogc{
-		ubyte perm= 0u, rank;
+		TypeOfSize perm= 0u, rank;
 	  TypeOfSize idxMaxVal;
 		T[Size][Size] a= mat;
 		T[Size] temp;
@@ -414,7 +449,7 @@ if((isFloatingPoint!T || isComplex!T) && Size > 1){
 	}
 
 	/// ditto
-	ArrayLUP!Shape partialPivLU(MatrixType Shape: MatrixType.band3
+	ArrayLUP partialPivLU(MatrixType Shape: MatrixType.band3
 															)(in T[arrayLength!(Size, Size, Shape)]){
 		return new ArrayLUP(invertible, a, p, counterEx);
 	}
