@@ -1,15 +1,15 @@
 /*****************************************************************************
  * Lower triangular matrix Impl
  *****************************************************************************/
-module sekitk.lowertri;
+module sekitk.qvm.impl.lowertri;
 
-import sekitk.base: TypeOfSize, MajorOrder;
+import sekitk.qvm.common: TypeOfSize, MajorOrder;
 /+
 mixin template LowerTriangular(T, real Threshold, TypeOfSize Size, MajorOrder MatOdr){
 +/
 enum string LOWER_TRI= q{
 	import std.range: dropOne;
-	import sekitk.base;
+	import sekitk.qvm.common;
 
 public:
 	/********************************************
@@ -172,7 +172,10 @@ private:
 		}
 
 		/******************************************
+		 * determinant
 		 *
+		 * Time complexity:
+		 * 	O(n)= n
 		 ******************************************/
 		T detImpl(){
 			typeof(return) result= _values[0];
@@ -182,27 +185,52 @@ private:
 		}
 
 		/******************************************
+		 * Internal array of inverse matrix
 		 *
+		 * decompose L= D+L_s
 		 ******************************************/
-		T[arrayLength!(Size, Size, MatrixType.lowerTri)] inverseImpl(){
-			typeof(return) num= void;
+		TypeOfInternalArray inverseImpl(){
+			typeof(return) result= void;
+			{
+				auto idxSetDiag= IndexSetDiag!TemplateArgs();
+				foreach(idx; idxSetDiag) result[idx]= Identity!(T, "*")/this._values[idx];
+			}
 
-			static if(Size == 1){
-				num= [Identity!(T, "*")/_values[0]];
-			}
+			static if(Size == 1){}
 			else static if(Size == 2){
-				num= [_values[2], -_values[1], _values[0]];
-				num[] /= this.det;
+				result[1]= -_values[1]/this.det;
 			}
+			/+
 			else static if(Size == 3){
-				num= [_values[3]*_values[5], -_values[1]*_values[5], _values[1]*_values[4]-_values[2]*_values[3],
-							_values[0]*_values[5], -_values[0]*_values[4],
-							_values[0]*_values[3]];
-				num[] /= this.det;
+				final switch(MatOdr){
+				case MajorOrder.row:
+					result[1]=;
+					result[3]=;
+					result[4]=;
+					break;
+/+
+ 0
+ 1  2
+ 3  4  5
++/
+				case MajorOrder.column
+				result[1]=;
+				result[2]=;
+				result[4]=;
+				/+
+ 0
+ 1  3
+ 2  4  5
++/
+				}
+
 			}
+			else static if(Size == 4){
+
+			}+/
 			else assert(false, "FIXME: inverse of n > 3 lower triangular matrix");
 
-			return num;
+			return result;
 		}
 	}
 };

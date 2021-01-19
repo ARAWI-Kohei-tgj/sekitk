@@ -1,17 +1,17 @@
 /**************************************************************
  * diagonal matrix
  *************************************************************/
-module sekitk.band1;
+module sekitk.qvm.impl.band1;
 
-import sekitk.base: TypeOfSize, MajorOrder;
+import sekitk.qvm.common: TypeOfSize, MajorOrder;
 /+
 mixin template Band1(T, real Thresold, TypeOfSize Size, MajorOrder MatOdr)
 if(Size > 1u){
 	+/
 enum string BAND1_IMPL= q{
 	import std.traits: Unqual;
-	import sekitk.base;
-	import sekitk.indexset: IndexSetDiag;
+	import sekitk.qvm.common;
+	import sekitk.qvm.indexset: IndexSetDiag;
 
 public:
 	// Operators

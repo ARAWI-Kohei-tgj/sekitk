@@ -1,9 +1,9 @@
 /******************************************************************************
  * dense matrix
  ******************************************************************************/
-module sekitk.dense;
+module sekitk.qvm.impl.dense;
 
-import sekitk.base: TypeOfSize, MajorOrder;
+import sekitk.qvm.common: TypeOfSize, MajorOrder;
 
 /**************************************************************
  * common methods of dense matrix both rectangular and square
@@ -16,16 +16,16 @@ enum string DENSE_COMMON= q{
 	import std.traits: Unqual, ParameterTypeTuple;
 	import std.array: array;
 	import std.range: repeat, iota, zip;
-	import mathematic.basic: Identity;
+	import sekitk.base: Identity;
 
-	import sekitk.base;
-	import sekitk.indexset;
+	import sekitk.qvm.common;
+	import sekitk.qvm.indexset;
 
-private:
+private @safe:
 	/********************************************
 	 * Operators
 	 ********************************************/
-	@safe pure nothrow const{
+	pure nothrow const{
 		// add & sub (different shape)
 		TypeOfThis opBinary(string Op,
 												MatrixType ShapeR: MatrixType.band1
@@ -73,12 +73,12 @@ private:
 
 		// matrix multiplications
 		Matrix!(Row, ColumnR,
-						MatOpReturnType!(Op, Shape, ShapeR),
+						ReturnTypeOfOperation!(Op, Shape, ShapeR),
 						MatOdr) opBinary(string Op: "*",
 														 TypeOfSize ColumnR,
 														 MatrixType ShapeR)(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs)
 	  if(ShapeR !is MatrixType.zero){
-			enum TypeOfIndex LEN= arrayLength!(Row, ColumnR, MatOpReturnType!(Op, Shape, ShapeR));
+			enum TypeOfIndex LEN= arrayLength!(Row, ColumnR, ReturnTypeOfOperation!(Op, Shape, ShapeR));
 			T[LEN] num= void;
 
 			final switch(ShapeR){
@@ -136,7 +136,7 @@ private:
 				}
 				break;
 			case MatrixType.lowerTri:
-				import mathematic.progression: sumFromZero;
+				import sekitk.integers.progression: sumFromZero;
 
 				size_t indexRhs(in size_t i, in size_t k) @safe pure nothrow @nogc const{
 					return i*(i+3u)/2u+sumFromZero(k)-sumFromZero(i);
@@ -152,7 +152,7 @@ private:
 					}
 				}
 				break;
-			case MatrixType.zero:
+			case MatrixType.zero, MatrixType.permutation:
 				assert(false);
 			}
 			return new typeof(return)(num);
@@ -175,7 +175,7 @@ private:
 			auto mDense1= new SekiTK!float.Matrix!(3, 7, MatrixType.dense)(tempDense1);
 			auto mDense2= new SekiTK!float.Matrix!(7, 5, MatrixType.dense)(tempDense2);
 			auto mul= mDense1*mDense2;
-			assert(mul.v[] == result[]);
+			assert(mul._values[] == result[]);
 		}
 		unittest{
 			SekiTK!float.Matrix!(4, 5, MatrixType.dense) lhsDense;
@@ -217,7 +217,7 @@ private:
 																		 2263, 2923, 3403, 3827, 4559,
 																		 3869, 4661, 5063, 5963, 6887];
 				auto mul= lhsDense*rhsDiag;
-				assert(mul.v[] == result[]);
+				assert(mul._values[] == result[]);
 			}
 			// dense * band3
 			{
@@ -226,7 +226,7 @@ private:
 																		 10380, 15195, 14877, 12689, 7258,
 																		 17112, 24195, 22999, 19269, 11146];
 				auto mul= lhsDense*rhsBand3;
-				assert(mul.v[] == result[]);						
+				assert(mul._values[] == result[]);						
 			}
 			// dense * upper triangular
 			{
@@ -235,7 +235,7 @@ private:
 																		 2263, 6186, 11017, 17816, 25391,
 																		 3869, 10146, 17369, 27956, 39455];
 				auto mul= lhsDense*rhsUptri;
-				assert(mul.v[] == result[]);
+				assert(mul._values[] == result[]);
 			}
 			// dense * lower triangular
 			{
@@ -244,7 +244,7 @@ private:
 																		 19233, 17806, 15267, 11392, 7003,
 																		 29877, 27284, 23191, 17440, 10579];
 				auto mul= lhsDense*rhsLotri;
-				assert(mul.v[] == result[]);
+				assert(mul._values[] == result[]);
 			}
 		}	// end of unittest
 	}
@@ -316,48 +316,41 @@ enum string RECT_DENSE= q{
 enum string SQ_DENSE= q{
 	mixin(DENSE_COMMON);
 
-private:
+private @safe pure:
 	/********************************************
 	 * determinant
 	 ********************************************/
-	static if(Size < 4){
-		T detImpl() @safe pure nothrow @nogc const{
-			typeof(return) result= void;
-			static if(Size == 1){
-				result= _values[0];
-			}
-			else static if(Size == 2){
-				/// Standars: rule of Sarrus
-				result= _values[0]*_values[3] -_values[1]*_values[2];
-			}
-			else{
-				/// Standards: rule of Sarrus
-				result= _values[0]*(_values[4]*_values[8] -_values[5]*_values[7])
-					+_values[1]*(_values[5]*_values[6]-_values[3]*_values[8])
-					+_values[2]*(_values[3]*_values[7]-_values[4]*_values[6]);
-			}
-			return result;
-		}
-	}
-	else{
-		/// ditto
-		T detImpl() @safe pure{
-			import numeric.pseudocmplx: assumeRealNum;
-			typeof(return) result;
+	T detImpl() nothrow @nogc const{
+		import numeric.pseudocmplx: assumeRealNum;
+		typeof(return) result= void;
 
-			if(ev !is null){
+		static if(Size == 1){
+			result= _values[0];
+		}
+		else static if(Size == 2){
+			/// Standars: rule of Sarrus
+			result= _values[0]*_values[3] -_values[1]*_values[2];
+		}
+		else static if(Size == 3){
+			/// Standards: rule of Sarrus
+			result= _values[0]*(_values[4]*_values[8] -_values[5]*_values[7])
+				+_values[1]*(_values[5]*_values[6]-_values[3]*_values[8])
+				+_values[2]*(_values[3]*_values[7]-_values[4]*_values[6]);
+		}
+		else{
+			/+
+			if(!_ev.isNull){
 				static if(isComplex!T) result= ev.det;
 				else result= assumeRealNum!(CT, Threshold)(ev.det);
 			}
-			else if(lup !is null) result= lup.det;	// LU decomposition is obtained
+			else if(!resultLU.isNull) result= resultLU.get.det;	// LU decomposition is obtained
 			else{
-				auto temp= LibLU.forwardElimination(this.opCast!(T[Column][Row])());	// forward elimination
-				// if DIP 1008 is enable, @nogc
+				auto temp= ForwardElimination!(Size, Shape, MatOdr).transform(this.opCast!(T[Column][Row]));	// forward elimination
 				result= temp.det;
-			}
-
-			return result;
+			}+/
+			result= T.nan;
 		}
+		return result;
 	}
 
 	/********************************************
@@ -378,10 +371,12 @@ private:
 	else{
 		TypeOfInternalArray inverseImpl() @safe pure{
 			typeof(return) num= void;
-			if(lup is null) this.decompose!(DecompScheme.lup);
-
-			if(lup !is null && lup.isInvertible) num= lup.inverseArray;
-
+/+
+			if(resultLU.isNull) this.decompose!(DecompScheme.luWithPartialPivDoolittle);
+			alias TypCurr= resultLU.get.type;
+			if(resultLU.get.get!TypCurr.isInvertible){
+				num= resultLU.get.get!TypCurr.inverseArray;
+			}+/
 			return num;
 		}
 	}

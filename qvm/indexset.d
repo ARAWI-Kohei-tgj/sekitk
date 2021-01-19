@@ -3,9 +3,9 @@
  *
  * "ForwardRange"
  ******************************************************************************/
-module sekitk.indexset;
+module sekitk.qvm.indexset;
 
-import sekitk.base;
+import sekitk.qvm.common: TypeOfSize, TypeOfIndex, MatrixType, MajorOrder, matrixConstraint;
 
 /**************************************************************
  * Mixin templates
@@ -185,7 +185,9 @@ if(Shape is MatrixType.zero){
 
 /// ditto
 struct IndexSetDiag(TypeOfSize Row, TypeOfSize Column, MatrixType Shape, MajorOrder MatOdr)
-if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
+if(Shape !is MatrixType.zero &&
+	 Shape !is MatrixType.permutation &&
+	 matrixConstraint!(Row, Column, Shape)){
 	import std.traits: Unqual;
 	import std.algorithm: min;
 	import std.range: iota, repeat;
@@ -200,14 +202,14 @@ if(Shape !is MatrixType.zero && matrixConstraint!(Row, Column, Shape)){
 	 ****************************/
 	TypeOfIndex opIndex(in size_t itrStep) @safe pure nothrow @nogc const{
 		import core.exception: onRangeError;
-		import mathematic.progression: sumFromZero;
+		import sekitk.integers.progression: sumFromZero;
 
 		const i= itrStep+_itrStep.stepLocal;
 	  size_t result;
 
 		if(itrStep < length){
 			final switch(Shape){
-			case MatrixType.zero:
+			case MatrixType.zero, MatrixType.permutation:
 				assert(false);	// unreachable
 			case MatrixType.dense:
 				result= (MatOdr is MajorOrder.row)? i*(Column+1u) : i*(Row+1u);
@@ -239,7 +241,7 @@ private:
 		typeof(return) result= idxCurr;
 
 		final switch(Shape){
-		case MatrixType.zero:
+		case MatrixType.zero, MatrixType.permutation:
 			assert(false);
 			break;
 		case MatrixType.dense:
@@ -309,11 +311,6 @@ if(Shape !is MatrixType.zero &&
 			static if(Shape is MatrixType.dense) result= [Size, 1];
 			else static if(Shape is MatrixType.band3) result= [2, 1];
 		  else result= [1];
-			break;
-		case MajorOrder.diag:
-			static if(Shape is MatrixType.dense ||
-								Shape is MatrixType.band3) result= [Size, 2*Size-1];
-			else result= [Size];
 		}
 		return result;
 	}();
@@ -326,37 +323,32 @@ if(Shape !is MatrixType.zero &&
 	 * Operators
 	 ****************************/
 	TypeOfIndex opIndex(in size_t idx) @safe pure nothrow @nogc const{
+		import sekitk.intop: partialSum;
 		typeof(return) result;
 
 		if(idx < length){
 			auto pos= _itrStep.itrPosition(idx);
 			result= INDEX_INIT[pos.stepSlice];
 			if(pos.stepLocal > 0){
-				final switch(MatOdr){
-				case MajorOrder.row, MajorOrder.column:
-					final switch(Shape){
-					case MatrixType.dense:
-						result += (Size+1u)*pos.stepLocal;
-						break;
-					case MatrixType.band3:
-						result += 3*pos.stepLocal;
-						break;
-					case MatrixType.upperTri, MatrixType.lowerTri:
-						static if(Shape is MatrixType.upperTri && MatOdr is MajorOrder.row ||
-											Shape is MatrixType.lowerTri && MatOdr is MajorOrder.column){
-							result += pos.stepLocal*Size
-								-sumFromZero(cast(TypeOfIndex)(pos.stepLocal-1));
-						}
-						else{
-							result += summation(3u, pos.stepLocal+2u);
-						}
-						break;
-					case MatrixType.zero, MatrixType.band1:
-						assert(false);
+				final switch(Shape){
+				case MatrixType.dense:
+					result += (Size+1u)*pos.stepLocal;
+					break;
+				case MatrixType.band3:
+					result += 3*pos.stepLocal;
+					break;
+				case MatrixType.upperTri, MatrixType.lowerTri:
+					static if(Shape is MatrixType.upperTri && MatOdr is MajorOrder.row ||
+										Shape is MatrixType.lowerTri && MatOdr is MajorOrder.column){
+						result += pos.stepLocal*Size
+							-sumFromZero(cast(TypeOfIndex)(pos.stepLocal-1));
+					}
+					else{
+						result += summation(3u, pos.stepLocal+2u);
 					}
 					break;
-				case MajorOrder.diag:
-					result += pos.stepLocal;
+				case MatrixType.zero, MatrixType.permutation, MatrixType.band1:
+					assert(false);
 				}
 			}
 		}
@@ -375,27 +367,22 @@ private:
 		}
 		else{
 			result= idxCurr;
-			final switch(MatOdr){
-			case MajorOrder.diag:
-				++result;
+
+			final switch(Shape){
+			case MatrixType.dense:
+				result += Size+1;
 				break;
-			case MajorOrder.row, MajorOrder.column:
-				final switch(Shape){
-				case MatrixType.dense:
-					result += Size+1;
-					break;
-				case MatrixType.band3:
-					result += 3u;
-					break;
-				case MatrixType.upperTri:
-					result += (MatOdr is MajorOrder.row)? Size-itr.stepLocal: 3u+itr.stepLocal;
-					break;
-				case MatrixType.lowerTri:
-					result += (MatOdr is MajorOrder.row)? 3u+itr.stepLocal: Size-itr.stepLocal;
-					break;
-				case MatrixType.zero, MatrixType.band1:
-					assert(false);
-				}
+			case MatrixType.band3:
+				result += 3u;
+				break;
+			case MatrixType.upperTri:
+				result += (MatOdr is MajorOrder.row)? Size-itr.stepLocal: 3u+itr.stepLocal;
+				break;
+			case MatrixType.lowerTri:
+				result += (MatOdr is MajorOrder.row)? 3u+itr.stepLocal: Size-itr.stepLocal;
+				break;
+			case MatrixType.zero, MatrixType.permutation, MatrixType.band1:
+				assert(false);
 			}
 		}
 		return result;
@@ -421,7 +408,7 @@ if(Shape !is MatrixType.zero &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
 	import std.traits: Unqual;
 	import std.range: iota, recurrence, repeat;
-	import mathematic.progression: sumFromZero;
+	import sekitk.integers.progression: sumFromZero;
 
 	/********************************************
 	 * Manifest constants
@@ -488,7 +475,8 @@ if(Shape !is MatrixType.zero &&
 				case MatrixType.dense, MatrixType.upperTri:
 					result += pos.stepLocal;
 					break;
-				case MatrixType.zero, MatrixType.band1, MatrixType.lowerTri:
+				case MatrixType.zero, MatrixType.permutation,
+					MatrixType.band1, MatrixType.lowerTri:
 					assert(false);
 				}
 			}
@@ -513,7 +501,7 @@ private:
 			case MatrixType.dense, MatrixType.upperTri, MatrixType.band3:
 				result += 1u;
 				break;
-			case MatrixType.zero, MatrixType.band1, MatrixType.lowerTri:
+			case MatrixType.zero, MatrixType.permutation, MatrixType.band1, MatrixType.lowerTri:
 				assert(false);
 			}
 		}
@@ -541,7 +529,7 @@ if(Shape !is MatrixType.zero &&
 	 Size > 1 && matrixConstraint!(Size, Size, Shape)){
 	import std.traits: Unqual;
 	import std.range: iota, repeat;
-	import mathematic.progression: sumFromZero;
+	import sekitk.integers.progression: sumFromZero;
 
 	/********************************************
 	 * Manifest constants
@@ -603,7 +591,7 @@ if(Shape !is MatrixType.zero &&
 				case MatrixType.dense, MatrixType.upperTri:
 					result += pos.stepLocal;
 					break;
-				case MatrixType.zero, MatrixType.band1, MatrixType.lowerTri:
+				case MatrixType.zero, MatrixType.permutation, MatrixType.band1, MatrixType.lowerTri:
 					assert(false);
 				}
 			}
@@ -628,7 +616,7 @@ private:
 			case MatrixType.dense, MatrixType.lowerTri, MatrixType.band3:
 				result += 1u;
 				break;
-			case MatrixType.zero, MatrixType.band1, MatrixType.upperTri:
+			case MatrixType.zero, MatrixType.permutation, MatrixType.band1, MatrixType.upperTri:
 				assert(false);
 			}
 		}
@@ -732,7 +720,7 @@ private:
 			case MatrixType.upperTri, MatrixType.lowerTri:
 				result += _stepSlice+_stepLocal;
 				break;
-			case MatrixType.zero, MatrixType.band1:
+			case MatrixType.zero, MatrixType.permutation, MatrixType.band1:
 				assert(false);
 			}
 		}
@@ -754,7 +742,7 @@ private:
 	else{
 		enum TypeOfSize Size= Row;
 		TypeOfIndex[Size] idxBeg= (){
-			import std.array: staticArray;
+			import std.array: array, staticArray;
 			import std.range: take;
 
 			static if(Shape is MatrixType.band1){
@@ -804,7 +792,7 @@ if((Size > 0 && Typ is IndexSetType.diag) ||
 			case MatrixType.upperTri, MatrixType.lowerTri:
 				result= 1u;
 				break;
-			case MatrixType.zero, MatrixType.band1:
+			case MatrixType.zero, MatrixType.permutation, MatrixType.band1:
 				assert(false);
 			}
 			return result;

@@ -1,8 +1,8 @@
 /******************************************************************************
  * Exceptions
  ******************************************************************************/
-module sekitk.exceptions;
-import sekitk.base: TypeOfSize, MatrixType;
+module sekitk.qvm.exception;
+import sekitk.qvm.common: TypeOfSize, MatrixType;
 
 /**************************************************************
  * ZeroNorm

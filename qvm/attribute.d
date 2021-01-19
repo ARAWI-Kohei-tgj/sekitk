@@ -1,16 +1,31 @@
-module sekitk.attribute;
+module sekitk.qvm.attribute;
 
-import sekitk.base: TypeOfSize, MatrixType, MajorOrder;
+import sekitk.qvm.common: TypeOfSize, MatrixType, MajorOrder;
 
 struct MatrixAttribute(TypeOfSize Row, TypeOfSize Column, MatrixType Shape){
 	import std.typecons: Ternary;
+	import sekitk.qvm.common: ReturnTypeOfTranspose;
 
-	this(inout scope bool invertible, inout scope bool orthogonal) @safe pure nothrow @nogc{
-		this._invertible= invertible;
-		this._orthogonal= _orthogonal;
+	@safe pure nothrow @nogc{
+		/// copy constructor
+		this(ref return scope inout typeof(this) other){}
+
+		///
+		this(inout scope bool invertible, inout scope bool orthogonal){
+			this._invertible= invertible;
+			this._orthogonal= orthogonal;
+		}
 	}
 
 	@safe pure nothrow @nogc{
+		MatrixAttribute!(Column, Row,
+										 ReturnTypeOfTranspose!Shape) transpose() const{
+		  auto result= typeof(return)();
+			result._invertible= this._invertible;
+			result._orthogonal= this._orthogonal;
+			return result;
+		}
+
 		bool isInvertible() const{
 			return (_invertible is Ternary.yes);
 		}
@@ -30,6 +45,9 @@ private:
 		final switch(Shape){
 		case MatrixType.zero:
 			result= Ternary.no;
+			break;
+		case MatrixType.permutation:
+			result= Ternary.yes;
 			break;
 		case MatrixType.dense,
 			MatrixType.band1,

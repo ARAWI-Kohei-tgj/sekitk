@@ -1,9 +1,9 @@
 /*****************************************************************************
  * upper triangular matrix
  *****************************************************************************/
-module sekitk.uppertri;
+module sekitk.qvm.impl.uppertri;
 
-import sekitk.base: TypeOfSize, MajorOrder;
+import sekitk.qvm.common: TypeOfSize, MajorOrder;
 
 /+
 mixin template UpperTriangular(T, real Threshold,
@@ -13,7 +13,7 @@ if(Size > 0){
 enum string UPPER_TRI= q{
 	import std.algorithm: map;
 	import std.range: dropOne;
-	import sekitk.base;
+	import sekitk.qvm.common;
 
 	// Operators
 	@safe pure nothrow const{
@@ -256,7 +256,7 @@ c24=                              a14*b14
 		}
 	}
 
-private:
+package:
 	@safe pure nothrow @nogc const{
 		/******************************************
 		 * Generating the converting array of upper triangular to dense
@@ -279,8 +279,73 @@ private:
 			return num;
 		}
 
+		/****************************************
+		 * extracts the specified column
+		 *
+		 * Params:
+		 * 	idxColumn= index of column (0 ≤ idxColumn < Column)
+		 ****************************************/
+		T[Row] sliceColumn(IdxType)(in IdxType idxColumn)
+		if(isIntegral!IdxType)
+	  in(idxColumn >= 0u && idxColumn < Column){
+			typeof(return) result= void;
+
+			auto idxSet= (){
+				final switch(MatOdr){
+				case MajorOrder.row:
+			  	return recurrence!((a, n) => a[n-1]+Column-n)(idxColumn).take(idxColumn+1u);
+					break;
+				case MajorOrder.column:
+					enum TypeOfIndex IDX_ST= sumFromZero(idxColumn);
+					return iota(IDX_ST, IDX_ST+idxColumn+1u);
+				}
+			}();
+
+			foreach(idxDest, idxInternal;
+							zip(iota(idxColumn+1u), idxSet)) result[idxDest]= this._values[idxInternal];
+			result[idxColumn+1u..$]= VALUE_ZERO;
+			return result;
+	  }
+		@safe pure @nogc unittest{
+			double[10] num= [4.75, 3.0, -2.25, 8.675,
+											 -2.825, -6.125, -5.5,
+											 -7.0, 1.25,
+											 5.625];
+			auto foo= new SekiTK!double.Matrix!(4, 4, MatrixType.upperTri, MajorOrder.row)(num);
+			assert(foo.sliceColumn(0u) == [4.75, 0.0, 0.0, 0.0]);
+			assert(foo.sliceColumn(1u) == [3.0, -2.825, 0.0, 0.0]);
+			assert(foo.sliceColumn(2u) == [-2.25, -6.125, -7.0, 0.0]);
+			assert(foo.sliceColumn(3u) == [8.675, -5.5, 1.25, 5.625]);
+			/+
+ 0  1  2  3
+ *  4  5  6
+ *  *  7  8
+ *  *  *  9
++/
+		}
+		@safe pure @nogc unittest{
+			double[10] num= [4.75,
+											 3.0, -2.25,
+											 8.675, -2.825, -6.125,
+											 -5.5, -7.0, 1.25, 5.625];
+			auto foo= new SekiTK!double.Matrix!(4, 4, MatrixType.upperTri, MajorOrder.column)(num);
+			assert(foo.sliceColumn(0u) == [4.75, 0.0, 0.0, 0.0]);
+			assert(foo.sliceColumn(1u) == [3.0, -2.25, 0.0, 0.0]);
+			assert(foo.sliceColumn(2u) == [8.675, -2.85, -6.125, 0.0]);
+			assert(foo.sliceColumn(3u) == [-5.5, -7.0, 1.25, 5.625]);
+			/+
+ 0  1  3  6
+ *  2  4  7
+ *  *  5  8
+ *  *  *  9
++/
+		}
+
 		/******************************************
 		 * determinant
+		 *
+		 * Time complexity:
+		 * 	O(n)= n
 		 ******************************************/
 		T detImpl(){
 			typeof(return) result= _values[0];
@@ -291,46 +356,62 @@ private:
 
 		/******************************************
 		 * Internal array of inverse matrix
+		 *
+		 * decompose U= D+U_s
+		 * U= D(I+D^{-1} U_s)
+		 * U^{-1}= (I+D^{-1} U_s)^{-1} D^{-1}
+		 * =\right[ sum_{i=0}^{n-1} (-D^{-1} U_s)^i \left] D^{-1}
+		 *
+		 * Time complexity:
+		 * 	O(n)= n^2+3n-6
 		 ******************************************/
 		TypeOfInternalArray inverseImpl(){
 			typeof(return) result= void;
+			{
+				auto idxSetDiag= IndexSetDiag!TemplateArgs();
+				foreach(idx; idxSetDiag) result[idx]= Identity!(T, "*")/this._values[idx];
+			}
 
-			static if(Size == 1){
-				result= [Identity!(T, "*")/_values[0]].idup;
-			}
+			static if(Size == 1){}
 			else static if(Size == 2){
-				result= [_values[2], -_values[1], _values[0]];
-				result[] /= this.det;
+				result[1]= -_values[1]/this.det;
 			}
-			else static if(Size == 3u){
-				result= [_values[3]*_values[5], -_values[1]*_values[5], _values[1]*_values[4]-_values[2]*_values[3],
-								 _values[0]*_values[5], -_values[0]*_values[4],
-								 _values[0]*_values[3]];
-			  result[] /= this.det;
+			else static if(Size == 3){
+				final switch(MatOdr){
+				case MajorOrder.row:
+					result[1]= -_values[1]/(_values[0]*_values[3]);
+					result[4]= -_values[4]/(_values[3]*_values[5]);
+					result[2]= (_values[1]*_values[4]-_values[2]*_values[3])/this.det;
+					break;
+				case MajorOrder.column:
+					result[1]= -_values[1]/(_values[0]*_values[2]);
+					result[4]= -_values[4]/(_values[2]*_values[5]);
+					result[3]= (_values[1]*_values[4]-_values[2]*_values[3])/this.det;
+				}
+			}
+			else static if(Size == 4){
+				final switch(MatOdr){
+				case MajorOrder.row:
+					result[1]= -_values[1]/(_values[0]*_values[4]);
+					result[2]= (_values[2]-_values[1]*_values[5]/_values[4])/(_values[0]*_values[7]);
+					result[3]= ((_values[3]*_values[4]-_values[1]*_values[6])*_values[7]
+											-(_values[2]*_values[4]+_values[1]*_values[5])*_values[8])/this.det;
+					result[5]= _values[5]/(_values[4]*_values[7]);
+					result[6]= (_values[6]-_values[5]*_values[8]/_values[7])/(_values[4]*_values[9]);
+					result[8]= -_values[8]/(_values[7]*_values[9]);
+					break;
+				case MajorOrder.column:
+					result[1]= -_values[1]/(_values[0]*_values[2]);
+					result[3]= (_values[3]-_values[1]*_values[4]/_values[2])/(_values[0]*_values[5]);
+					result[4]= _values[4]/(_values[2]*_values[5]);
+					result[6]=((_values[2]*_values[6]-_values[1]*_values[7])*_values[5]
+										 -(_values[2]*_values[3]+_values[1]*_values[4])*_values[8])/this.det;
+					result[7]= (_values[7]-_values[4]*_values[8]/_values[5])/(_values[2]*_values[9]);
+					result[8]= -_values[8]/(_values[5]*_values[9]);
+				}
 			}
 			else{
-				assert(false, "not be implemented");
-				/+
-				Matrix!(SIZE, SIZE, MatrixType.Band1) lambda_inv, identity;
-				StrictTri!(MatrixType.UpperTri, SIZE, 1u) r, temp;
-				// Lambda^{-1}
-				{
-					T[SIZE] temp_diag= void;
-					foreach(j, idx; idxSetDiag) temp_diag[j]= 1.0/v[idx];
-					lambda_inv= new typeof(lambda_inv)(temp_diag);
-				}
-				// -Lambda^{-1} * U_u
-				{
-					T[v.length-SIZE] temp_up= void;
-					foreach(j, idx; idxSetUpperTri) temp_up[j]= -v[idx];
-					r= new typeof(r)(temp_up);
-					r= lambda_inv*r;
-				}
-				identity= new typeof(identity)(T(1.0));
-				temp= r;
-				foreach(i; 2u..SIZE) temp += r^^i;
-				num= ((identity+temp)*lambda_inv).v[];
-				+/
+				assert(false, "I shall be implemented.");	// FIXME:
 			}
 
 			return result;

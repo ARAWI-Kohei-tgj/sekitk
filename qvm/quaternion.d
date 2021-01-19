@@ -4,19 +4,19 @@
  * Authors: 新井 浩平 (Kohei ARAI), arai-kohei-xg@ynu.jp
  * Version: 1.0
  ******************************************************************************/
-module sekitk.quaternion;
+module sekitk.qvm.quaternion;
 
 import std.traits: isFloatingPoint;
 
-mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
-	import sekitk.base: TypeOfSize;
-	import sekitk.vectorbase: VectorBase;
+mixin template QuaternionImpl(T, T Threshold)
+if(isFloatingPoint!T){
+	import sekitk.qvm.common: TypeOfSize;
+	import sekitk.qvm.impl.vectorbase;
 
 	/************************************************************
 	 * Quaternion type
 	 ************************************************************/
-  class Quaternion{
-		mixin VectorBase!(T, Threshold, 4u);
+  struct Quaternion{
 		mixin(VECTOR_BASE_IMPL);
 
 	private:
@@ -83,7 +83,7 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 					+this._values[1]*rhs._values[2]
 					-this._values[2]*rhs._values[1]
 					+this._values[3]*rhs._values[0];
-				return new typeof(return)(num);
+				return typeof(return)(num);
 			}
 
 			/// quaternion / quaternion
@@ -104,59 +104,63 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 					+rhs._values[2]*this._values[1]
 					-rhs._values[3]*this._values[0];
 				foreach(ref elm; num) elm /= k;
-				return new typeof(return)(num);
+				return typeof(return)(num);
 			}
 		}
 
 		// Reserved methods
 		@safe const{
 			/****************************************
-			 * 
+			 * convert to string
 			 ****************************************/
-			void toString(Writer, Char)(scope Writer wrt, FormatSpec!Char formatSpec)
+			void toString(Writer, Char)(scope Writer wrt, scope const ref FormatSpec!Char formatSpec)
 			if(isOutputRange!(Writer, const(Char)[])){
 				import std.format: formatValue;
 				import std.range.primitives: put;
 
-				uint i;	// =0
-				put(wrt, PREFIX);
-				formatValue(wrt, _values[0], formatSpec);
-				put(wrt, "; ");
-				formatValue(wrt, _values[1], formatSpec);
-				put(wrt, "i, ");
-				formatValue(wrt, _values[2], formatSpec);
-				put(wrt, "j, ");
-				formatValue(wrt, _values[3], formatSpec);
-				put(wrt, "k" ~SUFFIX);
+				wrt.put(PAREN_START);
+				wrt.formatValue(_values[0], formatSpec);
+				wrt.put("; ");
+				wrt.formatValue(_values[1], formatSpec);
+				wrt.put("i, ");
+				wrt.formatValue(_values[2], formatSpec);
+				wrt.put("j, ");
+				wrt.formatValue(_values[3], formatSpec);
+				wrt.put("k" ~PAREN_END);
 			}
-
-			/// ditto
-			override string toString(){
-				import sekitk.base: trustedAssumeUnique;
-
-				char[] buf;
-				buf.reserve(Size*6u+(PREFIX.length+SUFFIX.length)*char.sizeof);
-				auto fmt = FormatSpec!char("%s");
-				this.toString((const(char)[] s){buf ~= s;}, fmt);
-				return trustedAssumeUnique(buf);
-			}
-
 		  unittest{
 				double[4] foo= [1.0, 2.0, 3.0, 4.0];
 				auto bar= SekiTK!double.Quaternion(foo);
 				assert(bar.toString == "Quaternion(1; 2i, 3j, 4k)");
 			}
+
+			/// ditto
+		  string toString(){
+				import std.exception: assumeUnique;
+
+				char[] buf;
+				{
+					enum size_t RESERVE_SIZE= PAREN_START.length
+						+"; i, j, k".length
+						+"-123.45678".length*4
+						+PAREN_END.length;
+					buf.reserve(RESERVE_SIZE);
+				}
+				auto fmt= FormatSpec!char("%s");
+			  toString((const(char)[] s){buf ~= s;}, fmt);
+				return (char[] bufMutable) @trusted{return assumeUnique(bufMutable);}(buf);
+			}
 		}
 
 		// Other methods
-		@property @safe pure nothrow const{
+		@property @safe pure nothrow @nogc const{
 			/****************************************
 			 * Each elements
 			 ****************************************/
-			T w() @nogc{return _values[0];}
-			T x() @nogc{return _values[1];}
-			T y() @nogc{return _values[2];}
-			T z() @nogc{return _values[3];}
+			T w(){return _values[0];}
+			T x(){return _values[1];}
+			T y(){return _values[2];}
+			T z(){return _values[3];}
 
 			/****************************************
 			 * Conjugate quaternion
@@ -165,20 +169,20 @@ mixin template QuaternionImpl(T, T Threshold) if(isFloatingPoint!T){
 				T[4] num= void;
 				num[0]= this._values[0];
 				num[1 .. 3] = -this._values[1 .. 3];
-				return new typeof(return)(num);
+				return typeof(return)(num);
 			}
 
 			/****************************************
 			 * Vector part
 			 ****************************************/
 			Vector!3u vec(){
-				T[3] temp= _values[1..4];
-				return new Vector!3u(temp);
+				import std.array: staticArray;
+				return typeof(return)(_values[1..4].staticArray!3u);
 			}
 		}
 
 	private:
-		enum string PREFIX= "Quaternion(";
-		enum string SUFFIX= ")";
+		enum string PAREN_START= "Quaternion(";
+		enum string PAREN_END= ")";
 	}
 }
