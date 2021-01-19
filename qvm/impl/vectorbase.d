@@ -105,7 +105,7 @@ public:
      ******************************************/
     TypeOfThis opBinary(string Op, TypeR: TypeOfThis)(in TypeR rhs) const
     if(isPlusOrMinusSign!Op){
-      auto result= TypeOfThis(this);
+      auto result= TypeOfThis(this._values);
       result.opOpAssign!Op(rhs);
       return result;
     }

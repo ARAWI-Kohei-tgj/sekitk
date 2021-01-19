@@ -12,163 +12,164 @@ import sekitk.qvm.common: TypeOfSize, TypeOfIndex, MatrixType, MajorOrder, matri
  **************************************************************/
 mixin template IndexSetBase(MatrixType Shape, IndexSetType IdxTyp)
 if(Shape is MatrixType.zero ||
-	 Shape is MatrixType.band3 ||
-	 Shape is MatrixType.upperTri ||
-	 Shape is MatrixType.lowerTri){
-	import std.algorithm;
-	import std.array;
-	import std.range;
-	import std.typecons: Tuple, tuple;
-	import std.traits: Unqual, ParameterTypeTuple;
-	import core.exception: onRangeError;
+   Shape is MatrixType.band3 ||
+   Shape is MatrixType.upperTri ||
+   Shape is MatrixType.lowerTri){
+  import std.algorithm;
+  import std.array;
+  import std.range;
+  import std.typecons: Tuple, tuple;
+  import std.traits: Unqual, ParameterTypeTuple;
+  import core.exception: onRangeError;
 
-	/********************************************
-	 * Constructors
-	 ********************************************/
-	this(in typeof(this) other) @safe pure nothrow @nogc{}
+  /********************************************
+   * Constructors
+   ********************************************/
+  this(in typeof(this) other) @safe pure nothrow @nogc{}
 
-	/********************************************
-	 * Requirement for a ForwardRange
-	 ********************************************/
-	@safe pure nothrow {
-		TypeOfIndex front() @nogc const @property{
-			onRangeError;
-			return 0;
-		}
+  /********************************************
+   * Requirement for a ForwardRange
+   ********************************************/
+  @safe pure nothrow {
+    TypeOfIndex front() @nogc const @property{
+      onRangeError;
+      return 0;
+    }
 
-		TypeOfIndex moveFront() @nogc{
-			onRangeError;
-			return 0;
-		}
+    TypeOfIndex moveFront() @nogc{
+      onRangeError;
+      return 0;
+    }
 
-		void popFront() @nogc{onRangeError;}
-		bool empty() @nogc const @property{return true;}
-	}
+    void popFront() @nogc{onRangeError;}
+    bool empty() @nogc const @property{return true;}
+  }
 
-	/********************************************
-	 * Other methods
-	 ********************************************/
-	@safe pure nothrow @nogc const{
-		TypeOfIndex back() const @property{
-			onRangeError;
-			return 0;
-		}
+  /********************************************
+   * Other methods
+   ********************************************/
+  @safe pure nothrow @nogc const{
+    TypeOfIndex back() const @property{
+      onRangeError;
+      return 0;
+    }
 
-		TypeOfIndex opIndex(in size_t index){
-			onRangeError;
-			return 0;
-		}
-		size_t length() @property{return 0;}
-		alias opDollar= length;
-	}
+    TypeOfIndex opIndex(in size_t index){
+      onRangeError;
+      return 0;
+    }
 
-	@safe pure const{
-		int opApply(scope int delegate(in TypeOfIndex) @safe pure nothrow dg){return 0;}
-		int opApply(scope int delegate(in size_t, in TypeOfIndex) @safe pure nothrow dg){return 0;}
-	}
+    size_t length() @property{return 0;}
+    alias opDollar= length;
+  }
+
+  @safe pure const{
+    int opApply(scope int delegate(in TypeOfIndex) @safe pure nothrow dg){return 0;}
+    int opApply(scope int delegate(in size_t, in TypeOfIndex) @safe pure nothrow dg){return 0;}
+  }
 }
 
 /// ditto
 mixin template IndexSetBase(TypeOfSize Row, TypeOfSize Column,
-														MatrixType Shape,
-														MajorOrder MatOdr,
-														IndexSetType IdxTyp)
+			    MatrixType Shape,
+			    MajorOrder MatOdr,
+			    IndexSetType IdxTyp)
 if(Shape is MatrixType.dense ||
-	 Shape is MatrixType.band1 ||
-	 Shape is MatrixType.band3 ||
-	 Shape is MatrixType.upperTri ||
-	 Shape is MatrixType.lowerTri){
-	import core.exception: onRangeError;
-	import std.algorithm: min;
-	import std.traits: Unqual, ParameterTypeTuple;
+   Shape is MatrixType.band1 ||
+   Shape is MatrixType.band3 ||
+   Shape is MatrixType.upperTri ||
+   Shape is MatrixType.lowerTri){
+  import core.exception: onRangeError;
+  import std.algorithm: min;
+  import std.traits: Unqual, ParameterTypeTuple;
 
-	/********************************************
-	 * Constructor
-	 ********************************************/
-	this(in typeof(this) other) @safe pure nothrow @nogc{
-		this._idx= other._idx;
-		this._itrStep= other._itrStep;
-	}
+  /********************************************
+   * Constructor
+   ********************************************/
+  this(in typeof(this) other) @safe pure nothrow @nogc{
+    this._idx= other._idx;
+    this._itrStep= other._itrStep;
+  }
 
-	/********************************************
-	 * Requirement for a InputRange
-	 ********************************************/
-	@safe pure nothrow{
-		TypeOfIndex front() @nogc const @property{
-			if(this.empty) onRangeError;
-			return _idx;
-		}
+  /********************************************
+   * Requirement for a InputRange
+   ********************************************/
+  @safe pure nothrow{
+    TypeOfIndex front() @nogc const @property{
+      if(this.empty) onRangeError;
+      return _idx;
+    }
 
-	  TypeOfIndex moveFront() @nogc{
-		  mixin(INITIALIZE);
-			return _idx;
-		}
+    TypeOfIndex moveFront() @nogc{
+      mixin(INITIALIZE);
+      return _idx;
+    }
 
-		void popFront() @nogc{
-			if(empty) onRangeError;
-			_idx= recurrRel(_idx, _itrStep++);
-		}
+    void popFront() @nogc{
+      if(empty) onRangeError;
+      _idx= recurrRel(_idx, _itrStep++);
+    }
 
-		bool empty() @nogc const @property{
-			return (_itrStep.totalStepRemain > 0)? false: true;
-		}
-	}
+    bool empty() @nogc const @property{
+      return (_itrStep.totalStepRemain > 0)? false: true;
+    }
+  }
 
-	/********************************************
-	 * Other methods
-	 ********************************************/
-	@safe pure nothrow @nogc const{
-		size_t length(){
-			return _itrStep.totalStepRemain;
-		}
+  /********************************************
+   * Other methods
+   ********************************************/
+  @safe pure nothrow @nogc const{
+    size_t length(){
+      return _itrStep.totalStepRemain;
+    }
 
-		alias opDollar= length;
-	}
+    alias opDollar= length;
+  }
 
-	@safe{
-		enum string IMPL= q{
-			const size_t offset= _itrStep.totalStep;
-			typeof(return) result= 0;
-			TypeOfIndex idx= _idx;
-			auto step= Unqual!(typeof(_itrStep))(_itrStep);
-			foreach(_; offset..offset+_itrStep.totalStepRemain){
-				result= dg(idx);
-				idx= recurrRel(idx, step++);
-			}
-			return result;
-		};
+  @safe{
+    enum string IMPL= q{
+      const size_t offset= _itrStep.totalStep;
+      typeof(return) result= 0;
+      TypeOfIndex idx= _idx;
+      auto step= Unqual!(typeof(_itrStep))(_itrStep);
+      foreach(_; offset..offset+_itrStep.totalStepRemain){
+	result= dg(idx);
+	idx= recurrRel(idx, step++);
+      }
+      return result;
+    };
 
-		int opApply(Dg)(scope Dg dg) if(ParameterTypeTuple!Dg.length == 1){
-			mixin(IMPL);
-		}
+    int opApply(Dg)(scope Dg dg) if(ParameterTypeTuple!Dg.length == 1){
+      mixin(IMPL);
+    }
 /+
-		int opApply(DG: int delegate(in TypeOfIndex __applyArg0) @safe pure nothrow)(scope DG dg) pure nothrow const{
-			mixin(IMPL);
-		}
+ int opApply(DG: int delegate(in TypeOfIndex __applyArg0) @safe pure nothrow)(scope DG dg) pure nothrow const{
+ mixin(IMPL);
+ }
 
-		int opApply(DG: int delegate(in T __applyArg0) @safe pure nothrow @nogc,
-								T: TypeOfIndex)(scope DG dg) pure nothrow @nogc const{
-			mixin(IMPL);
-		}
+ int opApply(DG: int delegate(in T __applyArg0) @safe pure nothrow @nogc,
+ T: TypeOfIndex)(scope DG dg) pure nothrow @nogc const{
+ mixin(IMPL);
+ }
 
-		int opApply(DG: int delegate(ref T __applyArg0) @safe pure nothrow,
-								T: TypeOfIndex)(scope DG dg) pure nothrow const{
-			mixin(IMPL);
-		}
+ int opApply(DG: int delegate(ref T __applyArg0) @safe pure nothrow,
+ T: TypeOfIndex)(scope DG dg) pure nothrow const{
+ mixin(IMPL);
+ }
 +/
-		int opApply(DG: int delegate(in size_t, in TypeOfIndex) @safe pure nothrow @nogc
-								)(scope DG dg) pure nothrow @nogc const{
-			const size_t offset= _itrStep.totalStep;
-			TypeOfIndex idx= _idx;
-			typeof(return) result= 0;
-			auto step= Unqual!(typeof(_itrStep))(_itrStep);
-			foreach(_; offset..offset+_itrStep.totalStepRemain){
-				result= dg(step.totalStepCurr, idx);
-				idx= recurrRel(idx, step++);
-			}
-			return result;
-		}
-	}
+    int opApply(DG: int delegate(in size_t, in TypeOfIndex) @safe pure nothrow @nogc
+		)(scope DG dg) pure nothrow @nogc const{
+      const size_t offset= _itrStep.totalStep;
+      TypeOfIndex idx= _idx;
+      typeof(return) result= 0;
+      auto step= Unqual!(typeof(_itrStep))(_itrStep);
+      foreach(_; offset..offset+_itrStep.totalStepRemain){
+	result= dg(step.totalStepCurr, idx);
+	idx= recurrRel(idx, step++);
+      }
+      return result;
+    }
+  }
 
 private:
 	TypeOfIndex _idx= INDEX_INIT[0];
@@ -186,75 +187,74 @@ if(Shape is MatrixType.zero){
 /// ditto
 struct IndexSetDiag(TypeOfSize Row, TypeOfSize Column, MatrixType Shape, MajorOrder MatOdr)
 if(Shape !is MatrixType.zero &&
-	 Shape !is MatrixType.permutation &&
-	 matrixConstraint!(Row, Column, Shape)){
-	import std.traits: Unqual;
-	import std.algorithm: min;
-	import std.range: iota, repeat;
+   Shape !is MatrixType.permutation &&
+   matrixConstraint!(Row, Column, Shape)){
+  import std.traits: Unqual;
+  import std.algorithm: min;
+  import std.range: iota, repeat;
 
-	enum TypeOfIndex[1] INDEX_INIT= [0];
-	enum string INITIALIZE= "_idx= INDEX_INIT[0];_itrStep.initialize;";
+  enum TypeOfIndex[1] INDEX_INIT= [0];
+  enum string INITIALIZE= "_idx= INDEX_INIT[0];_itrStep.initialize;";
 
-	mixin IndexSetBase!(Row, Column, Shape, MatOdr, IndexSetType.diag);
+  mixin IndexSetBase!(Row, Column, Shape, MatOdr, IndexSetType.diag);
 
-	/****************************
-	 * Operators
-	 ****************************/
-	TypeOfIndex opIndex(in size_t itrStep) @safe pure nothrow @nogc const{
-		import core.exception: onRangeError;
-		import sekitk.integers.progression: sumFromZero;
+  /****************************
+   * Operators
+   ****************************/
+  TypeOfIndex opIndex(in size_t itrStep) @safe pure nothrow @nogc const{
+    import core.exception: onRangeError;
+    import sekitk.integers.progression: sumFromZero;
 
-		const i= itrStep+_itrStep.stepLocal;
-	  size_t result;
+    const i= itrStep+_itrStep.stepLocal;
+    size_t result;
 
-		if(itrStep < length){
-			final switch(Shape){
-			case MatrixType.zero, MatrixType.permutation:
-				assert(false);	// unreachable
-			case MatrixType.dense:
-				result= (MatOdr is MajorOrder.row)? i*(Column+1u) : i*(Row+1u);
-				break;
-			case MatrixType.band1:
-				result= i;
-				break;
-			case MatrixType.band3:
-				result= 3u*i;
-				break;
-			case MatrixType.upperTri:
-				result= (MatOdr is MajorOrder.row)? i*Column-sumFromZero(i)+i : i+sumFromZero(i);
-				break;
-			case MatrixType.lowerTri:
-				result= (MatOdr is MajorOrder.row)? i+sumFromZero(i) : i*Row-sumFromZero(i)+i;
-			}
-		}
-		else{
-			onRangeError();
-		}
-		return cast(typeof(return))(result);
-	}
+    if(itrStep < length){
+      final switch(Shape){
+      case MatrixType.zero, MatrixType.permutation:
+	assert(false);	// unreachable
+      case MatrixType.dense:
+	result= (MatOdr is MajorOrder.row)? i*(Column+1u) : i*(Row+1u);
+	break;
+      case MatrixType.band1:
+	result= i;
+	break;
+      case MatrixType.band3:
+	result= 3u*i;
+	break;
+      case MatrixType.upperTri:
+	result= (MatOdr is MajorOrder.row)? i*Column-sumFromZero(i)+i : i+sumFromZero(i);
+	break;
+      case MatrixType.lowerTri:
+	result= (MatOdr is MajorOrder.row)? i+sumFromZero(i) : i*Row-sumFromZero(i)+i;
+      }
+    }
+    else{
+      onRangeError();
+    }
+    return cast(typeof(return))(result);
+  }
 
 private:
-	/********************************************
-	 * $(I a)_(i+1)= f(a_i, i)
-	 ********************************************/
-	TypeOfIndex recurrRel(in TypeOfIndex idxCurr, in Unqual!(typeof(_itrStep)) itr) @safe pure nothrow @nogc const{
-		typeof(return) result= idxCurr;
+  /********************************************
+   * $(I a)_(i+1)= f(a_i, i)
+   ********************************************/
+  TypeOfIndex recurrRel(in TypeOfIndex idxCurr, in Unqual!(typeof(_itrStep)) itr) @safe pure nothrow @nogc const{
+    typeof(return) result= idxCurr;
 
-		final switch(Shape){
-		case MatrixType.zero, MatrixType.permutation:
-			assert(false);
-			break;
-		case MatrixType.dense:
-			result += (MatOdr is MajorOrder.row)? Column+1u: Row+1u;
-			break;
-		case MatrixType.band1:
-			result += 1u;
-			break;
-		case MatrixType.band3:
-			result += 3u;
-			break;
-		case MatrixType.upperTri:
-			result += (MatOdr is MajorOrder.row)? Row-itr.stepLocal: itr.stepLocal+2u;
+    final switch(Shape){
+    case MatrixType.zero, MatrixType.permutation:
+      assert(false);
+    case MatrixType.dense:
+      result += (MatOdr is MajorOrder.row)? Column+1u: Row+1u;
+      break;
+    case MatrixType.band1:
+      result += 1u;
+      break;
+    case MatrixType.band3:
+      result += 3u;
+      break;
+    case MatrixType.upperTri:
+      result += (MatOdr is MajorOrder.row)? Row-itr.stepLocal: itr.stepLocal+2u;
 /+
 Matrix!(6, 6, Dense, Row)
  0  1  2  3  4  5
@@ -274,12 +274,12 @@ Matrix!(6, 6, Dense, Column)
  *  *  *  *  * 20
 idx= [0, 2, 5, 9, 14, 20]; d= 2, 3, 4, 5, 6
 +/
-			break;
-		case MatrixType.lowerTri:
-			result += (MatOdr is MajorOrder.row)? itr.stepLocal+2u: Column-itr.stepLocal;
-		}
-		return result;
-	}
+      break;
+    case MatrixType.lowerTri:
+      result += (MatOdr is MajorOrder.row)? itr.stepLocal+2u: Column-itr.stepLocal;
+    }
+    return result;
+  }
 }
 
 /**************************************************************
