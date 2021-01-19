@@ -106,7 +106,7 @@ public:
     TypeOfThis opBinary(string Op, TypeR: TypeOfThis)(in TypeR rhs) const
     if(isPlusOrMinusSign!Op){
       auto result= TypeOfThis(this);
-      result.opOpAssign!(Op, TypeR)(rhs);
+      result.opOpAssign!Op(rhs);
       return result;
     }
 
@@ -128,7 +128,7 @@ public:
     TypeOfThis opBinaryRight(string Op: "*", TypeL)(in TypeL lhs) const
     if(is(TypeL: T)){
       auto result= TypeOfThis(this._values);
-      result.opBinary!Op(lhs);
+      result.opBinary!(Op, TypeL)(lhs);
       return result;
     }
 
