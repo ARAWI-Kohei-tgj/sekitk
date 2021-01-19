@@ -15,475 +15,474 @@ import std.traits: isFloatingPoint;
 import sekitk.complex.pseudo: isComplex;
 
 mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T){
-	import sekitk.qvm.common: TypeOfSize, TypeOfIndex, matrixConstraint;
-	import sekitk.qvm.impl.zero, sekitk.qvm.impl.permutation;
+  import sekitk.qvm.common: TypeOfSize, TypeOfIndex, matrixConstraint;
+  import sekitk.qvm.impl.zero, sekitk.qvm.impl.permutation;
 
-	/***********************************************************
-	 * matrix
-	 *
-	 * This type can be customized by setting its size, matrix type and major order
-	 * via the template arguments.
-	 *
-	 * Template arguments:
-	 * Shape
-	 * MatrixType.zero= zero matrix
-	 * MatrixType.permutation= permutation matrix
-	 * MatrixType.dense= dense matrix
-	 * MatrixType.band1= diagonal matrix
-	 * MatrixType.band3= tridiagonal matrix
-	 * MatrixType.upperTri= upper triangular matrix
-	 * MatrixType.lowerTri= lower triangular matrix
-	 *
-	 * MatOdr
-	 * MajorOrder.row= row major order
-	 * MajorOrder.column= column major order
-	 ***********************************************************/
-	mixin(MATRIX_IMPL_ZERO);
-	mixin(MATRIX_IMPL_PERM);
+  /***********************************************************
+   * matrix
+   *
+   * This type can be customized by setting its size, matrix type and major order
+   * via the template arguments.
+   *
+   * Template arguments:
+   * Shape
+   * MatrixType.zero= zero matrix
+   * MatrixType.permutation= permutation matrix
+   * MatrixType.dense= dense matrix
+   * MatrixType.band1= diagonal matrix
+   * MatrixType.band3= tridiagonal matrix
+   * MatrixType.upperTri= upper triangular matrix
+   * MatrixType.lowerTri= lower triangular matrix
+   *
+   * MatOdr
+   * MajorOrder.row= row major order
+   * MajorOrder.column= column major order
+   ***********************************************************/
+  mixin(MATRIX_IMPL_ZERO);
+  mixin(MATRIX_IMPL_PERM);
 
-	// dense, diagonal, tridiagonal, upper triangular, lower triangular
-	class Matrix(TypeOfSize Row, TypeOfSize Column,
-							 MatrixType Shape, MajorOrder MatOdr= MajorOrder.row)
-	if(Shape !is MatrixType.zero &&
-		 Shape !is MatrixType.permutation &&
-		 matrixConstraint!(Row, Column, Shape)){
-		import std.complex;
-		import std.format: FormatSpec;
-		import std.meta: Alias, AliasSeq;
-		import std.range: isOutputRange;
-		import std.traits: Unqual, TemplateArgsOf,
-			isDynamicArray, isStaticArray, isIntegral;
-		import std.typecons: Tuple, Ternary, Nullable;
-		import std.variant: VariantN, maxSize;
+  // dense, diagonal, tridiagonal, upper triangular, lower triangular
+  class Matrix(TypeOfSize Row, TypeOfSize Column,
+	       MatrixType Shape, MajorOrder MatOdr= MajorOrder.row)
+  if(Shape !is MatrixType.zero &&
+     Shape !is MatrixType.permutation &&
+     matrixConstraint!(Row, Column, Shape)){
+    import std.complex;
+    import std.format: FormatSpec;
+    import std.meta: Alias, AliasSeq;
+    import std.range: isOutputRange;
+    import std.traits: Unqual, TemplateArgsOf,
+      isDynamicArray, isStaticArray, isIntegral;
+    import std.typecons: Tuple, Ternary, Nullable;
+    import std.variant: VariantN, maxSize;
 
-		import sekitk.qvm.common;
-		import sekitk.qvm.exception: SingularMatrix;
-		import sekitk.qvm.indexset: IndexSetDiag,
-			IndexSetSubDiag,
-			IndexSetStrictTriR,
-			IndexSetStrictTriL,
-			IndexSetTranspose;
-		import sekitk.qvm.algorithm.decomposition: MatrixDecomp;
-		import sekitk.qvm.eigen;
-		import sekitk.qvm.attribute;
+    import sekitk.qvm.common;
+    import sekitk.qvm.exception: SingularMatrix;
+    import sekitk.qvm.indexset: IndexSetDiag,
+      IndexSetSubDiag,
+      IndexSetStrictTriR,
+      IndexSetStrictTriL,
+      IndexSetTranspose;
+    import sekitk.qvm.algorithm.decomposition: MatrixDecomp;
+    import sekitk.qvm.eigen;
+    import sekitk.qvm.attribute;
 
-	private:
-		/*****************************************
-		 * Alias and manifest constants
-		 *****************************************/
-		static if(isFloatingPoint!T){
-			alias RT= T;	// type of real number
-			alias CT= Complex!T;	// type of complex number
-		}
-		else{
-			alias RT= BaseRealType!T;
-			alias CT= T;
-		}
+  private:
+    /*****************************************
+     * Alias and manifest constants
+     *****************************************/
+    static if(isFloatingPoint!T){
+      alias RT= T;	// type of real number
+      alias CT= Complex!T;	// type of complex number
+    }
+    else{
+      alias RT= BaseRealType!T;
+      alias CT= T;
+    }
 
-		alias TypeOfThis= typeof(this);
-		alias TemplateArgs= TemplateArgsOf!(typeof(this));
-		alias TypeOfInternalArray= T[arrayLength!(TemplateArgs[0..3])];
-		alias TypeOfAttr= MatrixAttribute!(TemplateArgs[0..3]);
+    alias TypeOfThis= typeof(this);
+    alias TemplateArgs= TemplateArgsOf!(typeof(this));
+    alias TypeOfInternalArray= T[arrayLength!(TemplateArgs[0..3])];
+    alias TypeOfAttr= MatrixAttribute!(TemplateArgs[0..3]);
 
-		enum T VALUE_ZERO= Identity!(T, "+");
-		enum bool isSquare= (Row == Column);
-		static if(isSquare){
-			enum TypeOfSize Size= Row;
-		  //alias LibLU= MatrixDecomp!(T, Threshold).DecompLU!(Size, Shape, MatOdr);
-		}
+    enum T VALUE_ZERO= Identity!(T, "+");
+    enum bool isSquare= (Row == Column);
+    static if(isSquare){
+      enum TypeOfSize Size= Row;
+      //alias LibLU= MatrixDecomp!(T, Threshold).DecompLU!(Size, Shape, MatOdr);
+    }
 
-	public @safe:
-		/******************************************
-		 * mixin
-		 ******************************************/
-		static if(Shape is MatrixType.dense){
-			import sekitk.qvm.impl.dense;
-			static if(isSquare){
-			  mixin(SQ_DENSE);
-			}
-			else{
-				mixin(RECT_DENSE);
-			}
-		}
-		else static if(Shape is MatrixType.band1){
-			import sekitk.qvm.impl.band1;
-			mixin(BAND1_IMPL);
-		}
-		else static if(Shape is MatrixType.band3){
-			import sekitk.qvm.impl.band3;
-			mixin Band3!(T, Threshold, Size, MatOdr) MethodsImpl;
-		}
-		else static if(Shape is MatrixType.upperTri){
-			import sekitk.qvm.impl.uppertri;
-			mixin(UPPER_TRI);
-		}
-		else static if(Shape is MatrixType.lowerTri){
-			import sekitk.qvm.impl.lowertri;
-			mixin(LOWER_TRI);
-		}
-		else{
-			static assert(false);
-		}
+    public @safe:
+    /******************************************
+     * mixin
+     ******************************************/
+    static if(Shape is MatrixType.dense){
+      import sekitk.qvm.impl.dense;
+      static if(isSquare){
+	mixin(SQ_DENSE);
+      }
+      else{
+	mixin(RECT_DENSE);
+      }
+    }
+    else static if(Shape is MatrixType.band1){
+      import sekitk.qvm.impl.band1;
+      mixin(BAND1_IMPL);
+    }
+    else static if(Shape is MatrixType.band3){
+      import sekitk.qvm.impl.band3;
+      mixin Band3!(T, Threshold, Size, MatOdr) MethodsImpl;
+    }
+    else static if(Shape is MatrixType.upperTri){
+      import sekitk.qvm.impl.uppertri;
+      mixin(UPPER_TRI);
+    }
+    else static if(Shape is MatrixType.lowerTri){
+      import sekitk.qvm.impl.lowertri;
+      mixin(LOWER_TRI);
+    }
+    else{
+      static assert(false);
+    }
 
-	  // Constructors
-	  pure nothrow @nogc{
-			/// Default constructor
-			this(){}
+    // Constructors
+    pure nothrow @nogc{
+      /// Default constructor
+      this(){}
 
-			/****************************************
-			 * Copy constructor (the same shape)
-			 * Params:
-			 * 	other= another matrix of type "Matrix!(Row, Column, Shape, MatOdr)"
-			 ****************************************/
-			this(ref return scope inout TypeOfThis other){
-				_values[]= other._values[];
-				_attr= other._attr;
-			}
+      /****************************************
+       * Copy constructor (the same shape)
+       * Params:
+       * 	other= another matrix of type "Matrix!(Row, Column, Shape, MatOdr)"
+       ****************************************/
+      this(ref return scope inout TypeOfThis other){
+	_values[]= other._values[];
+	_attr= other._attr;
+      }
 
-			/****************************************
-			 * Initialize with a number of type "T"
-			 * Params:
-			 * 	num= a number
-			 ****************************************/
-			this(TypeScalar)(scope const TypeScalar num)
-		  if(is(TypeScalar: T)){
-				_values[]= num;
-			}
+      /****************************************
+       * Initialize with a number of type "T"
+       * Params:
+       * 	num= a number
+       ****************************************/
+      this(TypeScalar)(scope const TypeScalar num)
+      if(is(TypeScalar: T)){
+	_values[]= num;
+      }
 
-			/****************************************
-			 * Initialize with an array
-			 * Params:
-			 * 	nums= array of type ArrayType
-			 * 	attrGiven= 
-			 ****************************************/
-			this(ArrayType)(scope const ArrayType nums,
-										  scope const TypeOfAttr attrGiven= TypeOfAttr.init)
-			if((isDynamicArray!ArrayType && is(Unqual!ArrayType: T[])) ||
-				 (isStaticArray!ArrayType && is(Unqual!ArrayType: TypeOfInternalArray)))
-			in(nums.length == arrayLength!(TemplateArgs[0..3]), "mismatch array length"){
-			  _values[]= nums[];
-				_attr= attrGiven;
-			}
+      /****************************************
+       * Initialize with an array
+       * Params:
+       * 	nums= array of type ArrayType
+       * 	attrGiven= 
+       ****************************************/
+      this(ArrayType)(scope const ArrayType nums,
+		      scope const TypeOfAttr attrGiven= TypeOfAttr.init)
+      if((isDynamicArray!ArrayType && is(Unqual!ArrayType: T[])) ||
+	 (isStaticArray!ArrayType && is(Unqual!ArrayType: TypeOfInternalArray)))
+      in(nums.length == arrayLength!(TemplateArgs[0..3]), "mismatch array length"){
+	  _values[]= nums[];
+	  _attr= attrGiven;
+      }
 
-			// for only dense matrix
-			static if(Shape is MatrixType.dense){
-				/**************************************
-				 * Initialize with a 2-dimensional array
-				 **************************************/
-				this(ArrayType)(scope const T[Column][Row] num,
-												scope const TypeOfAttr attrGiven= TypeOfAttr.init)
-				if((MatOdr is MajorOrder.row) && is(Unqual!ArrayType: T[Column][Row]) ||
-					 (MatOdr is MajorOrder.column) && is(Unqual!ArrayType: T[Row][Column])){
-					enum TypeOfSize ITR_LIMIT= (MatOdr is MajorOrder.row)? Row: Column;
-					enum TypeOfSize STEP= (MatOdr is MajorOrder.row)? Column: Row;
-					size_t st, en= 0u;
+      // for only dense matrix
+      static if(Shape is MatrixType.dense){
+	/**************************************
+	 * Initialize with a 2-dimensional array
+	 **************************************/
+	this(ArrayType)(scope const T[Column][Row] num,
+			scope const TypeOfAttr attrGiven= TypeOfAttr.init)
+	if((MatOdr is MajorOrder.row) && is(Unqual!ArrayType: T[Column][Row]) ||
+	   (MatOdr is MajorOrder.column) && is(Unqual!ArrayType: T[Row][Column])){
+	  enum TypeOfSize ITR_LIMIT= (MatOdr is MajorOrder.row)? Row: Column;
+	  enum TypeOfSize STEP= (MatOdr is MajorOrder.row)? Column: Row;
+	  size_t st, en= 0u;
 
-					foreach(i; 0u..ITR_LIMIT){
-						st= en;
-						en += STEP;
-					  _values[st..en]= num[i][];
-					}
-					_attr= attrGiven;
-				}
+	  foreach(i; 0u..ITR_LIMIT){
+	    st= en;
+	    en += STEP;
+	    _values[st..en]= num[i][];
+	  }
+	  _attr= attrGiven;
+	}
 
-				/**************************************
-				 * Initialize with an array of Vector!Row
-				 **************************************/
-				this(scope const Vector!Row[Column] vecArray,
-						 scope const TypeOfAttr attrGiven= TypeOfAttr.init){
-					static if(MatOdr is MajorOrder.row){
-						size_t idx= void;
-						foreach(idxH; 0u..Column){
-							idx= idxH;
-							foreach(idxV; 0u..Row){
-								this._values[idx]= vecArray[idxH]._values[idxV];
-								idx += Column;
-							}
-						}
-					}
-					else{
-						size_t idx_st= 0u, idx_en= Row;
-						foreach(idxH; 0u..Column){
-							this._values[idx_st..idx_en]= vecArray[idxH]._values[];
-							idx_st= idx_en;
-							idx_en += Row;
-						}
-					}
-					_attr= attrGiven;
-				}
+	/**************************************
+	 * Initialize with an array of Vector!Row
+	 **************************************/
+	this(scope const Vector!Row[Column] vecArray,
+	     scope const TypeOfAttr attrGiven= TypeOfAttr.init){
+	  static if(MatOdr is MajorOrder.row){
+	    size_t idx= void;
+	    foreach(idxH; 0u..Column){
+	      idx= idxH;
+	      foreach(idxV; 0u..Row){
+		this._values[idx]= vecArray[idxH]._values[idxV];
+		idx += Column;
+	      }
+	    }
+	  }
+	  else{
+	    size_t idx_st= 0u, idx_en= Row;
+	    foreach(idxH; 0u..Column){
+	      this._values[idx_st..idx_en]= vecArray[idxH]._values[];
+	      idx_st= idx_en;
+	      idx_en += Row;
+	    }
+	  }
+	  _attr= attrGiven;
+	}
+	
+      }	// end of block "Shape is MatrixType.dense"
+    }
 
-			}	// end of block "Shape is MatrixType.dense"
-		}
+    // Operators & Reserved methods
+    /// plus or minus sign
+    pure nothrow const{
+      TypeOfThis opUnary(string Op: "+")(){
+	return new typeof(return)(this);
+      }
 
-	  // Operators & Reserved methods
-		/// plus or minus sign
-		pure nothrow const{
-			TypeOfThis opUnary(string Op: "+")(){
-				return new typeof(return)(this);
-			}
+      TypeOfThis opUnary(string Op: "-")(){
+	TypeOfInternalArray result= _values[];
+	foreach(ref elm; result) elm= -elm;
+	return new typeof(return)(result);
+      }
 
-			TypeOfThis opUnary(string Op: "-")(){
-				TypeOfInternalArray result= _values[];
-				foreach(ref elm; result) elm= -elm;
-				return new typeof(return)(result);
-			}
+      /****************************************
+       * Matrix ± Matrix
+       ****************************************/
+      TypeOfThis opBinary(string Op)(inout scope TypeOfThis rhs)
+	if(isPlusOrMinusSign!Op){
+	  TypeOfInternalArray temp= _values[]; 
+	  mixin("temp[] " ~Op ~"= rhs._values[];");
+	  return new typeof(return)(temp);
+	}
 
-			/****************************************
-			 * Matrix ± Matrix
-			 ****************************************/
-		  TypeOfThis opBinary(string Op)(inout scope TypeOfThis rhs)
-			if(isPlusOrMinusSign!Op){
-			  TypeOfInternalArray temp= _values[]; 
-				mixin("temp[] " ~Op ~"= rhs._values[];");
-				return new typeof(return)(temp);
-			}
+      /// ditto
+      TypeOfThis opBinary(string Op,
+			  MatrixType ShapeR: MatrixType.zero
+			  )(inout scope Matrix!(Row, Column, ShapeR, MatOdr) rhs)
+      if(isPlusOrMinusSign!Op && ShapeR != Shape){
+	return new typeof(return)(this);
+      }
 
-			/// ditto
-		  TypeOfThis opBinary(string Op,
-													MatrixType ShapeR: MatrixType.zero
-													)(inout scope Matrix!(Row, Column, ShapeR, MatOdr) rhs)
-			if(isPlusOrMinusSign!Op && ShapeR != Shape){
-				return new typeof(return)(this);
-			}
+      /****************************************
+       * Matrix * Scalar, Matrix / Scalar
+       ****************************************/
+      // matrix * scalar or matrix / scalar
+      // O(m*n)
+      TypeOfThis opBinary(string Op, TypeR)(inout scope TypeR rhs)
+      if((Op == "*" || Op == "/") && is(TypeR: T)){
+	TypeOfInternalArray num= _values[]; 
+	mixin("num[] " ~Op ~"= rhs;");
+	return new typeof(return)(num);
+      }
 
+      /****************************************
+       * Scalar * Matrix
+       ****************************************/
+      // O(m*n)
+      TypeOfThis opBinaryRight(string Op: "*", TypeL)(inout scope TypeL lhs)
+      if(is(TypeL: T)){
+	return this.opBinary!(Op, TypeL)(lhs);
+      }
 
-			/****************************************
-			 * Matrix * Scalar, Matrix / Scalar
-			 ****************************************/
-			// matrix * scalar or matrix / scalar
-			// O(m*n)
-		  TypeOfThis opBinary(string Op, TypeR)(inout scope TypeR rhs)
-			if((Op == "*" || Op == "/") && is(TypeR: T)){
-			  TypeOfInternalArray num= _values[]; 
-				mixin("num[] " ~Op ~"= rhs;");
-				return new typeof(return)(num);
-			}
+      /****************************************
+       * Matrix * Vector
+       ****************************************/
+      Vector!Row opBinary(string OP: "*")(inout scope Vector!Column rhs){
+	auto colmat= Matrix!(Column, 1u, MatrixType.dense, MatOdr)(rhs.a);
+	return new typeof(return)(this*colmat);
+      }
 
-			/****************************************
-			 * Scalar * Matrix
-			 ****************************************/
-			// O(m*n)
-		  TypeOfThis opBinaryRight(string Op: "*", TypeL)(inout scope TypeL lhs)
-			if(is(TypeL: T)){
-				return this.opBinary!(Op, TypeL)(lhs);
-			}
+      /****************************************
+       * Matrix * O
+       ****************************************/
+      Matrix!(Row, ColumnR,
+	      MatrixType.zero,
+	      MatOdr) opBinary(string Op: "*",
+			       TypeOfSize ColumnR,
+			       MatrixType ShapeR: MatrixType.zero
+			       )(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs){
+	return new typeof(return)();
+      }
 
-			/****************************************
-			 * Matrix * Vector
-			 ****************************************/
-			Vector!Row opBinary(string OP: "*")(inout scope Vector!Column rhs){
-				auto colmat= Matrix!(Column, 1u, MatrixType.dense, MatOdr)(rhs.a);
-			  return new typeof(return)(this*colmat);
-			}
+      /****************************************
+       * Index operator
+       *
+       * Params:
+       *  j= index of the column, (1 ≤ j ≤ COLUMN)
+       *
+       * Returns:
+       *  Sliced column as a Vector!ROW
+       *
+       * Throws:
+       *  RangeError
+       ****************************************/
+      Vector!Row opIndex(IdxType)(in IdxType j) @nogc
+      if(isIntegral!IdxType)
+      in(j > 0 && j <= Column){
+	return typeof(return)(sliceVertically(j-1u));
+      }
 
-			/****************************************
-			 * Matrix * O
-			 ****************************************/
-			Matrix!(Row, ColumnR,
-							MatrixType.zero,
-							MatOdr) opBinary(string Op: "*",
-															 TypeOfSize ColumnR,
-															 MatrixType ShapeR: MatrixType.zero
-															 )(in Matrix!(Column, ColumnR, ShapeR, MatOdr) rhs){
-				return new typeof(return)();
-			}
+      /****************************************
+       * element
+       * Throws:
+       *  RangeError
+       ****************************************/
+      T opIndex(IdxType)(in IdxType idxRow, in IdxType idxColumn) @nogc
+      if(isIntegral!IdxType){
+	const pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
+	auto map= internalIndexOf!(Row, Column, Shape, MatOdr)(pos);
+	return map.isZero? VALUE_ZERO: _values[map.index];
+      }
 
-			/****************************************
-			 * Index operator
-			 *
-			 * Params:
-			 *  j= index of the column, (1 ≤ j ≤ COLUMN)
-			 *
-			 * Returns:
-			 *  Sliced column as a Vector!ROW
-			 *
-			 * Throws:
-			 *  RangeError
-			 ****************************************/
-			Vector!Row opIndex(IdxType)(inout scope IdxType j) @nogc
-			if(isIntegral!IdxType)
-			in(j > 0 && j <= Column){
-				return typeof(return)(sliceVertically(j-1u));
-			}
+      /****************************************
+       * Cast to dense matrix
+       ****************************************/
+      Mat opCast(Mat: Matrix!(Row, Column, MatrixType.dense, MatOdr))(){
+	typeof(return) result;
+	static if(Shape is MatrixType.dense){
+	  result= new typeof(return)(this);
+	}
+	else{
+	  result= new typeof(return)(arrayDense);
+	}
 
-			/****************************************
-			 * element
-			 * Throws:
-			 *  RangeError
-			 ****************************************/
-			T opIndex(IdxType)(inout scope IdxType idxRow, inout scope IdxType idxColumn) @nogc
-			if(isIntegral!IdxType){
-				const pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
-				auto map= internalIndexOf!(Row, Column, Shape, MatOdr)(pos);
-				return map.isZero? VALUE_ZERO: _values[map.index];
-			}
+	return result;
+      }
 
-			/****************************************
-			 * Cast to dense matrix
-			 ****************************************/
-		  Mat opCast(Mat: Matrix!(Row, Column, MatrixType.dense, MatOdr))(){
-			  typeof(return) result;
-			  static if(Shape is MatrixType.dense){
-					result= new typeof(return)(this);
-				}
-				else{
-				  result= new typeof(return)(arrayDense);
-			  }
+      /****************************************
+       * Cast to 2-dimensional array
+       ****************************************/
+      Array2D opCast(Array2D: T[Column][Row])() @nogc
+      if(((MatOdr is MajorOrder.row) && is(Array2D: T[Column][Row])) ||
+	 ((MatOdr is MajorOrder.column) && is(Array2D: T[Row][Column]))){
+	enum ITR_LIMIT_OUTER= (MatOdr is MajorOrder.row)? Row: Column;
+	enum ITR_LIMIT_INNER= (MatOdr is MajorOrder.row)? Column: Row;
+	typeof(return) num= void;
 
-				return result;
-			}
+	foreach(i; 0u..ITR_LIMIT_OUTER)
+	  foreach(j; 0u..ITR_LIMIT_INNER){{
+	      num[i][j]= this.opIndex(i+1u, j+1u);
+        }}
 
-			/****************************************
-			 * Cast to 2-dimensional array
-			 ****************************************/
-			Array2D opCast(Array2D: T[Column][Row])() @nogc
-			if(((MatOdr is MajorOrder.row) && is(Array2D: T[Column][Row])) ||
-				 ((MatOdr is MajorOrder.column) && is(Array2D: T[Row][Column]))){
-				enum ITR_LIMIT_OUTER= (MatOdr is MajorOrder.row)? Row: Column;
-				enum ITR_LIMIT_INNER= (MatOdr is MajorOrder.row)? Column: Row;
-				typeof(return) num= void;
+	return num;
+      }
+    }	// end of block `@safe pure nothrow const'
 
-				foreach(i; 0u..ITR_LIMIT_OUTER)
-					foreach(j; 0u..ITR_LIMIT_INNER){{
-						num[i][j]= this.opIndex(i+1u, j+1u);
-			  }}
+    // Reserved methods
+    const{
+      /****************************************
+       * Convert to string
+       ****************************************/
+      override string toString(){
+	string trustedAssumeUnique(char[] bufMutable) @trusted pure{
+	  import std.exception: assumeUnique;
+	  return assumeUnique(bufMutable);
+	}
 
-				return num;
-			}
-		}	// end of block `@safe pure nothrow const'
+	char[] buf;
+	{
+	  enum size_t RESERVE_SIZE= (LEFT_PAREN.length	// "Matrix["
+				     +"[],\n".length	// "[],\n" or "[]]\n"
+				     +DELIM.length*(Column-1)	// ", "
+				     +"-123.45678".sizeof*Column
+				     )*Row;
+	  buf.reserve(RESERVE_SIZE);
+	}
+	auto fmt= FormatSpec!char("%s");
+	this.toString((const(char)[] s){buf ~= s;}, fmt);
 
-	  // Reserved methods
-		const{
-			/****************************************
-			 * Convert to string
-			 ****************************************/
-			override string toString(){
-				string trustedAssumeUnique(char[] bufMutable) @trusted pure{
-					import std.exception: assumeUnique;
-					return assumeUnique(bufMutable);
-				}
+	return trustedAssumeUnique(buf);
+      }
 
-				char[] buf;
-				{
-					enum size_t RESERVE_SIZE= (LEFT_PAREN.length	// "Matrix["
-																		 +"[],\n".length	// "[],\n" or "[]]\n"
-																		 +DELIM.length*(Column-1)	// ", "
-																		 +"-123.45678".sizeof*Column
-																		 )*Row;
-					buf.reserve(RESERVE_SIZE);
-				}
-				auto fmt= FormatSpec!char("%s");
-				this.toString((const(char)[] s){buf ~= s;}, fmt);
+      /// ditto
+      void toString(Writer, Char)(scope Writer w, FormatSpec!Char formatSpec)
+	if(isOutputRange!(Writer, const(Char)[])){
+	  import std.array: array;
+	  import std.format: formatValue;
+	  import std.math: signbit;
+	  import std.range: put, repeat;
+	  import std.typecons: Tuple;
 
-				return trustedAssumeUnique(buf);
-			}
+	  immutable string TAB= array('\x20'.repeat(LEFT_PAREN.length));
+	  T num= void;
+	  Tuple!(TypeOfIndex, "index", bool, "isZero") map;
 
-			/// ditto
-			void toString(Writer, Char)(scope Writer w, FormatSpec!Char formatSpec)
-			if(isOutputRange!(Writer, const(Char)[])){
-				import std.array: array;
-				import std.format: formatValue;
-				import std.math: signbit;
-				import std.range: put, repeat;
-				import std.typecons: Tuple;
+	  w.put(LEFT_PAREN);
+	  foreach(TypeOfSize i; 1u..Row+1u){
+	    if(i > 1) w.put(TAB);
+	    w.put("[");
+	    foreach(TypeOfSize j; 1u..Column+1u){
+	      map= internalIndexOf!TemplateArgs(MatrixPosition!(Row, Column)(i, j));	// FIXME:
+	      if(map.isZero){
+		w.put("*");	// always zero
+	      }
+	      else{
+		num= _values[map.index];
+		if(approxEqualZero(num)) w.put("≈0");
+		else w.formatValue(num, formatSpec);
+	      }
+	      if(j < Column) w.put(", ");
+	    }
+	    w.put((i < Row)? "],\n": "]");
+	  }
+	  w.put("]");
+	}
+    }
 
-			  immutable string TAB= array('\x20'.repeat(LEFT_PAREN.length));
-				T num= void;
-				Tuple!(TypeOfIndex, "index", bool, "isZero") map;
+    // Other mathematical methods
+    pure{
+      /****************************************
+       * Transpose
+       *
+       * \bvec{A}^T
+       ****************************************/
+      Matrix!(Column, Row,
+	      ReturnTypeOfTranspose!Shape,
+	      MatOdr) transpose() nothrow const @property{
+	import std.range: iota, zip;
+	enum TypeOfIndex LEN= arrayLength!(TemplateArgs[0..3]);
 
-				w.put(LEFT_PAREN);
-				foreach(TypeOfSize i; 1u..Row+1u){
-					if(i > 1) w.put(TAB);
-					w.put("[");
-					foreach(TypeOfSize j; 1u..Column+1u){
-						map= internalIndexOf!TemplateArgs(MatrixPosition!(Row, Column)(i, j));	// FIXME:
-						if(map.isZero){
-							w.put("*");	// always zero
-						}
-					  else{
-							num= _values[map.index];
-							if(approxEqualZero(num)) w.put("≈0");
-							else w.formatValue(num, formatSpec);
-						}
-						if(j < Column) w.put(", ");
-					}
-					w.put((i < Row)? "],\n": "]");
-				}
-				w.put("]");
-			}
-		}
+	TypeOfInternalArray num= void;
+	auto idxSet= IndexSetTranspose!TemplateArgs();
+	foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc];
+	return new typeof(return)(num, _attr.transpose);
+      }
 
-	  // Other mathematical methods
-		pure{
-			/****************************************
-			 * Transpose
-			 *
-			 * \bvec{A}^T
-			 ****************************************/
-			Matrix!(Column, Row,
-						  ReturnTypeOfTranspose!Shape,
-							MatOdr) transpose() nothrow const @property{
-				import std.range: iota, zip;
-				enum TypeOfIndex LEN= arrayLength!(TemplateArgs[0..3]);
+      /****************************************
+       * Adjoint matrix
+       *
+       *
+       ****************************************/
+      Matrix!(Column, Row,
+	      ReturnTypeOfTranspose!Shape,
+	      MatOdr) adjoint() nothrow const @property{
+	import std.range: iota, zip;
+	static if(isFloatingPoint!T) import sekitk.complex.pseudo: conj;
+	enum TypeOfIndex LEN= arrayLength!(TemplateArgs[0..3]);
 
-				TypeOfInternalArray num= void;
-				auto idxSet= IndexSetTranspose!TemplateArgs();
-				foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc];
-				return new typeof(return)(num, _attr.transpose);
-			}
-
-			/****************************************
-			 * Adjoint matrix
-			 *
-			 *
-			 ****************************************/
-			Matrix!(Column, Row,
-						  ReturnTypeOfTranspose!Shape,
-							MatOdr) adjoint() nothrow const @property{
-				import std.range: iota, zip;
-				static if(isFloatingPoint!T) import sekitk.complex.pseudo: conj;
-				enum TypeOfIndex LEN= arrayLength!(TemplateArgs[0..3]);
-
-				TypeOfInternalArray num= void;
-				auto idxSet= IndexSetTranspose!TemplateArgs();
-				foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc].conj;
-				return new typeof(return)(num, _attr.transpose);
-			}
+	TypeOfInternalArray num= void;
+	auto idxSet= IndexSetTranspose!TemplateArgs();
+	foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc].conj;
+	return new typeof(return)(num, _attr.transpose);
+      }
 
 
-			/****************************************
-			 * Adjugate matrix
-			 *
-			 * \adj_ij(\bvec{A})
-			 ****************************************/
+      /****************************************
+       * Adjugate matrix
+       *
+       * \adj_ij(\bvec{A})
+       ****************************************/
 /+
-			Matrix!(Row-1, Column-1,
-							MatrixType.dense, MatOdr) adj(IdxType)(in IdxType idxRow, in IdxType idxColumn)
-			if(isIntegral!IdxType)
-			in(idxRow > 0 && idxRow <= Row)
-			in(idxColumn > 0 && idxColumn <= Column){
-				import std.range: iota, chain;
+      Matrix!(Row-1, Column-1,
+              MatrixType.dense, MatOdr) adj(IdxType)(in IdxType idxRow, in IdxType idxColumn)
+      if(isIntegral!IdxType)
+      in(idxRow > 0 && idxRow <= Row)
+      in(idxColumn > 0 && idxColumn <= Column){
+        import std.range: iota, chain;
 
-				T[arrayLength!(Row-1, Column-1, MatrixType.dense)] num= void;
-				auto num2Dim= opCast!(T[Column][Row])();
-			  TypeOfIndex k= 0;
-				foreach(i; chain(iota(idxRow-1), iota(idxRow, Row))){
-					foreach(j; chain(iota(idxColumn), iota(idxColumn, Column))) num[k++]= num2Dim[i][j];
-				}
-				return new typeof(return)(num);
-			}
+	T[arrayLength!(Row-1, Column-1, MatrixType.dense)] num= void;
+	auto num2Dim= opCast!(T[Column][Row])();
+	TypeOfIndex k= 0;
+	foreach(i; chain(iota(idxRow-1), iota(idxRow, Row))){
+	  foreach(j; chain(iota(idxColumn), iota(idxColumn, Column))) num[k++]= num2Dim[i][j];
+	}
+	return new typeof(return)(num);
+      }
 +/
-		}
+    }
 
-		// non-mathematical methods
-		pure{
-			/****************************************
-			 * Decomposition
-			 ****************************************/
-			void decompose(DecompScheme Scheme)()
-			if(isSquare || (!isSquare && Scheme is DecompScheme.singularValue)){
+    // non-mathematical methods
+    pure{
+      /****************************************
+       * Decomposition
+       ****************************************/
+      void decompose(DecompScheme Scheme)()
+	if(isSquare || (!isSquare && Scheme is DecompScheme.singularValue)){
 /+
-				static if(isLU!Scheme){
+        static if(isLU!Scheme){
 					resultLU.get= LibLU.decompose!Scheme(cast(T[Column][Row])this);
 				}
 				else{
@@ -562,49 +561,49 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 				return new Matrix!(Size, Size, ShapeDest, MatOdr)(lup.matrix!Mat);
 			}
 +/
-			@property{
-				/**************************************
-				 * Trace
-				 *
-				 * \tr(\bvec{A})
-				 **************************************/
-				T trace() pure nothrow @nogc const{
-					import std.range: dropOne;
-					typeof(return) result= void;
+		  @property{
+		    /**************************************
+		     * Trace
+		     *
+		     * \tr(\bvec{A})
+		     **************************************/
+		    T trace() pure nothrow @nogc const{
+		      import std.range: dropOne;
+		      typeof(return) result= void;
 
-					result= _values[0];
-					static if(Size > 1u){
-						auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
-						foreach(TypeOfIndex idx; idxSet.dropOne) result += _values[idx];
-					}
-					return result;
-				}
+		      result= _values[0];
+		      static if(Size > 1u){
+			auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
+			foreach(TypeOfIndex idx; idxSet.dropOne) result += _values[idx];
+		      }
+		      return result;
+		    }
 
-				/**************************************
-				 * Determinant
-				 **************************************/
-				T det() pure nothrow @nogc const{
-					return _attr.isSingular? VALUE_ZERO: detImpl;
-				}
+		    /**************************************
+		     * Determinant
+		     **************************************/
+		    T det() pure nothrow @nogc const{
+		      return _attr.isSingular? VALUE_ZERO: detImpl;
+		    }
 
-				/**************************************
-				 * Inverse matrix
-				 **************************************/
-				typeof(this) inverse() pure{
-					if(_attr.isSingular){
-						throw new SingularMatrix();
-					}
-					else{
-						return new typeof(return)(inverseImpl);
-					}
-				}
-			}
+		    /**************************************
+		     * Inverse matrix
+		     **************************************/
+		    typeof(this) inverse() pure{
+		      if(_attr.isSingular){
+			throw new SingularMatrix();
+		      }
+		      else{
+			return new typeof(return)(inverseImpl);
+		      }
+		    }
+		  }
 
-			/****************************************
-			 * Eigen value
-			 *
-			 * \Lambda= \lambda_1, \lambda_2, ..., \lambda_n
-			 ****************************************/
+		  /****************************************
+		   * Eigen value
+		   *
+		   * \Lambda= \lambda_1, \lambda_2, ..., \lambda_n
+		   ****************************************/
 			/+
 			void findEigenValues() @property{//@safe pure nothrow @property{
 				import std.stdio;	// DEBUG:
@@ -684,9 +683,9 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 +/
 		}	// end of block "static if(isSquare)"
 
-	package:
-		TypeOfInternalArray _values;
-		TypeOfAttr _attr;
+  package:
+    TypeOfInternalArray _values;
+    TypeOfAttr _attr;
 		/+
 		static if(isSquare){
 			alias AllTypesOfResultLU= AliasSeq!(LibLU.Result!(DecompScheme.luWithNonPivDoolittle),
@@ -702,123 +701,123 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 		}
 +/
 
-	private @safe pure nothrow @nogc const:
-		enum string LEFT_PAREN= "Matrix[";
-		enum string DELIM= ", ";
+    private @safe pure nothrow @nogc const:
+    enum string LEFT_PAREN= "Matrix[";
+    enum string DELIM= ", ";
 
-	  bool approxEqualZero(in T num){
-			import sekitk.approx: approxEqualZero;
-			return approxEqualZero!(T, Threshold)(num);
-		}
+    bool approxEqualZero(in T num){
+      import sekitk.approx: approxEqualZero;
+      return approxEqualZero!(T, Threshold)(num);
+    }
 
-	package @safe pure nothrow @nogc const:
-		/*****************************************
-		 * extracts the specified row
-		 *
-		 * Params:
-		 *	idxRow= 0-based index of row (0 ≤ idxRow < Row)
-		 *****************************************/
-	  T[Column] sliceHorizontally(IdxType)(in IdxType idxRow)
-		if(isIntegral!IdxType)
-		in(idxRow >= 0 && idxRow < Row, "Argument is out of range."){
-			typeof(return) result= void;
+    package @safe pure nothrow @nogc const:
+    /*****************************************
+     * extracts the specified row
+     *
+     * Params:
+     *	idxRow= 0-based index of row (0 ≤ idxRow < Row)
+     *****************************************/
+    T[Column] sliceHorizontally(IdxType)(in IdxType idxRow)
+    if(isIntegral!IdxType)
+    in(idxRow >= 0 && idxRow < Row, "Argument is out of range."){
+      typeof(return) result= void;
 
-			final switch(MatOdr){
-			case MajorOrder.row:
-				enum size_t IDX_ST= Column*idxRow;
-				result[]= _values[IDX_ST .. IDX_ST+Row];
-				break;
-			case MajorOrder.column:
-				foreach(i; 0u..Column) result[i]= this.opIndex(i+1u, idxRow+1u);
-			}
-			return result;
-		}
+      final switch(MatOdr){
+      case MajorOrder.row:
+	enum size_t IDX_ST= Column*idxRow;
+	result[]= _values[IDX_ST .. IDX_ST+Row];
+	break;
+      case MajorOrder.column:
+	foreach(i; 0u..Column) result[i]= this.opIndex(i+1u, idxRow+1u);
+      }
+      return result;
+    }
 
-		/*****************************************
-		 * extracts the specified column
-		 *
-		 * Params:
-		 * 	idxColumn= 0-based index of column (0 ≤ idxColumn < Column)
-		 *****************************************/
-		T[Row] sliceVertically(IdxType)(in IdxType idxColumn)
-		if(isIntegral!IdxType)
-		in(idxColumn >= 0 && idxColumn < Column, "Argument is out of range."){
-			typeof(return) result= void;
+    /*****************************************
+     * extracts the specified column
+     *
+     * Params:
+     * 	idxColumn= 0-based index of column (0 ≤ idxColumn < Column)
+     *****************************************/
+    T[Row] sliceVertically(IdxType)(in IdxType idxColumn)
+    if(isIntegral!IdxType)
+    in(idxColumn >= 0 && idxColumn < Column, "Argument is out of range."){
+      typeof(return) result= void;
 
-			final switch(MatOdr){
-			case MajorOrder.row:
-				foreach(i; 0u..Row) result[i]= this.opIndex(i+1u, idxColumn+1u);
-				break;
-			case MajorOrder.column:
-			  const size_t IDX_ST= Row*idxColumn;
-				result[]= _values[IDX_ST .. IDX_ST+Row];
-			}
-			return result;
-		}
+      final switch(MatOdr){
+      case MajorOrder.row:
+	foreach(i; 0u..Row) result[i]= this.opIndex(i+1u, idxColumn+1u);
+	break;
+      case MajorOrder.column:
+	const size_t IDX_ST= Row*idxColumn;
+	result[]= _values[IDX_ST .. IDX_ST+Row];
+      }
+      return result;
+    }
 
-	} // end of class "Matrix!(size, size, shape)"
+  } // end of class "Matrix!(size, size, shape)"
 
-	/************************************************************
-	 * tie four matrix to one
-	 ************************************************************/
-	Matrix!(RowUp+RowLw, ColumnL+ColumnR,
-					MatrixType.dense,
-					MatOdr) tie(TypeOfSize RowUp, TypeOfSize RowLw,
-											TypeOfSize ColumnL, TypeOfSize ColumnR,
-											MatrixType ShapeLT, MatrixType ShapeRT,
-											MatrixType ShapeLB, MatrixType ShapeRB,
-											MajorOrder MatOdr
-											)(in Matrix!(RowUp, ColumnL, ShapeLT, MatOdr) matLT,
-												in Matrix!(RowUp, ColumnR, ShapeRT, MatOdr) matRT,
-												in Matrix!(RowLw, ColumnL, ShapeLB, MatOdr) matLB,
-												in Matrix!(RowLw, ColumnR, ShapeRB, MatOdr) matRB
-												) @safe pure nothrow @nogc{
-	  enum TypeOfSize Row= RowUp+RowLw;
-		enum TypeOfSize Column= ColumnL+ColumnR;
-		enum MatrixType ShapeOfReturn= (){
-			MatrixType result;
-			static if(ShapeRT is MatrixType.zero && ShapeLB is MatrixType.zero){
-				static if(ShapeLT is ShapeRB &&
-									(ShapeLT is MatrixType.band1 || ShapeLT is MatrixType.band3)){
-					result= ShapeLT;
-				}
-				else static if((ShapeLT is MatrixType.band1 && ShapeRB is MatrixType.band3) ||
-											 (ShapeLT is MatrixType.band3 && ShapeRB is MatrixType.band1)){
-					result= MatrixType.band3;
-				}
-			}
-			else static if(ShapeLT is MatrixType.upperTri &&
-										 ShapeLB is MatrixType.zero &&
-										 ShapeRB is MatrixType.upperTri){
-				result= MatrixType.upperTri;
-			}
-			else static if(ShapeLT is MatrixType.lowerTri &&
-										 ShapeRT is MatrixType.zero &&
-										 ShapeRB is MatrixType.lowewrTri){
-				result= MatrixType.lowerTri;
-			}
-			else{
-				result= MatrixType.dense;
-			}
-			return result;
-		}();
-
-	  const T[ColumnL][RowUp] aryLT= cast(T[ColumnL][RowUp])matLT;
-		const T[ColumnR][RowUp] aryRT= cast(T[ColumnR][RowUp])matRT;
-		const T[ColumnL][RowLw] aryLB= cast(T[ColumnL][RowLw])matLB;
-		const T[ColumnR][RowLw] aryRB= cast(T[ColumnR][RowLw])matRB;
-		T[arrayLength!(TemplateArgsOf!(typeof(return))[0..3])] num;
-
-		foreach(i; 0u..RowUp){
-			foreach(j; 0u..ColumnL) num[Column*i+j]= aryLT[i][j];
-			foreach(j; 0u..ColumnR) num[Column*i+ColumnL+j]= aryRT[i][j];
-		}
-
-		foreach(i; 0u..RowLw){
-			foreach(j; 0u..ColumnL) num[Column*(RowUp+i)+j]= aryLB[i][j];
-			foreach(j; 0u..ColumnR) num[Column*(RowUp+i)+ColumnL+j]= aryRB[i][j];
-		}
-
-		return new typeof(return)(num);
+  /************************************************************
+   * tie four matrix to one
+   ************************************************************/
+  Matrix!(RowUp+RowLw, ColumnL+ColumnR,
+	  MatrixType.dense,
+	  MatOdr) tie(TypeOfSize RowUp, TypeOfSize RowLw,
+		      TypeOfSize ColumnL, TypeOfSize ColumnR,
+		      MatrixType ShapeLT, MatrixType ShapeRT,
+		      MatrixType ShapeLB, MatrixType ShapeRB,
+		      MajorOrder MatOdr
+		      )(in Matrix!(RowUp, ColumnL, ShapeLT, MatOdr) matLT,
+			in Matrix!(RowUp, ColumnR, ShapeRT, MatOdr) matRT,
+			in Matrix!(RowLw, ColumnL, ShapeLB, MatOdr) matLB,
+			in Matrix!(RowLw, ColumnR, ShapeRB, MatOdr) matRB
+			) @safe pure nothrow @nogc{
+    enum TypeOfSize Row= RowUp+RowLw;
+    enum TypeOfSize Column= ColumnL+ColumnR;
+    enum MatrixType ShapeOfReturn= (){
+      MatrixType result;
+      static if(ShapeRT is MatrixType.zero && ShapeLB is MatrixType.zero){
+	static if(ShapeLT is ShapeRB &&
+		  (ShapeLT is MatrixType.band1 || ShapeLT is MatrixType.band3)){
+	  result= ShapeLT;
 	}
+	else static if((ShapeLT is MatrixType.band1 && ShapeRB is MatrixType.band3) ||
+		       (ShapeLT is MatrixType.band3 && ShapeRB is MatrixType.band1)){
+	  result= MatrixType.band3;
+	}
+      }
+      else static if(ShapeLT is MatrixType.upperTri &&
+		     ShapeLB is MatrixType.zero &&
+		     ShapeRB is MatrixType.upperTri){
+	result= MatrixType.upperTri;
+      }
+      else static if(ShapeLT is MatrixType.lowerTri &&
+		     ShapeRT is MatrixType.zero &&
+		     ShapeRB is MatrixType.lowewrTri){
+	result= MatrixType.lowerTri;
+      }
+      else{
+	result= MatrixType.dense;
+      }
+      return result;
+    }();
+
+    const T[ColumnL][RowUp] aryLT= cast(T[ColumnL][RowUp])matLT;
+    const T[ColumnR][RowUp] aryRT= cast(T[ColumnR][RowUp])matRT;
+    const T[ColumnL][RowLw] aryLB= cast(T[ColumnL][RowLw])matLB;
+    const T[ColumnR][RowLw] aryRB= cast(T[ColumnR][RowLw])matRB;
+    T[arrayLength!(TemplateArgsOf!(typeof(return))[0..3])] num;
+
+    foreach(i; 0u..RowUp){
+      foreach(j; 0u..ColumnL) num[Column*i+j]= aryLT[i][j];
+      foreach(j; 0u..ColumnR) num[Column*i+ColumnL+j]= aryRT[i][j];
+    }
+
+    foreach(i; 0u..RowLw){
+      foreach(j; 0u..ColumnL) num[Column*(RowUp+i)+j]= aryLB[i][j];
+      foreach(j; 0u..ColumnR) num[Column*(RowUp+i)+ColumnL+j]= aryRB[i][j];
+    }
+
+    return new typeof(return)(num);
+  }
 }

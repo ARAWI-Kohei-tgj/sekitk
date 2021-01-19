@@ -117,7 +117,8 @@ public:
     TypeOfThis opBinary(string Op, TypeR)(in TypeR rhs) const
     if((Op == "*" || Op == "/") && is(TypeR: T)){
       auto result= TypeOfThis(this._values);
-      result.opOpAssign!(Op, TypeR)(rhs);
+      //result.opOpAssign!(Op, TypeR)(rhs);
+      result *= rhs;
       return result;
     }
 
