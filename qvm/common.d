@@ -99,11 +99,7 @@ struct MatrixPosition(TypeOfSize Row, TypeOfSize Column){
     }
   }
 
-  //@disable this();
-  this(){
-    _idxRow= 1;
-    _idxColumn= 1;
-  }
+  @disable this();
 
   /// copy constructor
   this(ref return scope inout typeof(this) other){}
@@ -511,9 +507,9 @@ Tuple!(TypeOfIndex, "index",
 				       TypeOfSize Column,
 				       MatrixType Shape,
 				       MajorOrder MatOdr)(in MatrixPosition!(Row, Column) idxs)
-/+if(Shape !is MatrixType.zero &&
+if(Shape !is MatrixType.zero &&
    Shape !is MatrixType.permutation &&
-   matrixConstraint!(Row, Column, Shape))+/
+   matrixConstraint!(Row, Column, Shape))
 in(idxs.rangeCheck){
   typeof(return) result;
 
