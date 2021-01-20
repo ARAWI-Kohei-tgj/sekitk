@@ -395,7 +395,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	    if(i > 1) w.put(TAB);
 	    w.put("[");
 	    foreach(TypeOfSize j; 1u..Column+1u){
-	      map= internalIndexOf!(TemplateArgs)(MatrixPosition!(Row, Column)(i, j));	// FIXME:
+	      map= internalIndexOf!TemplateArgs(MatrixPosition!(Row, Column)(i, j));	// FIXME:
 	      if(map.isZero){
 		w.put("*");	// always zero
 	      }

@@ -42,16 +42,16 @@ enum MajorOrder{row, column}
  *********************************************/
 enum DecompScheme: ubyte{
   luWithNonPivDoolittle,			// non-pivoting LU decomposition with Doolittle algorithm
-    luWithNonPivCrout,					// non-pivoting LU decomposition with Crout algorithm
-    luWithPartialPivDoolittle,	// partial pivoting LU decomposition with Doolittle algorithm
-    luWithPartialPivCrout,			// partial pivoting LU decomposition with Crout algorithm
-    luWithFullPivDoolittle,			// full pivoting LU decomposition with Doolittle algorithm
-    luWithFullPivCrout,					// full pivoting LU decomposition with Crout algorithm
-    ldu,				// LDU decomposition
-    Cholesky,		// Cholesky decomposition
-    modCholesky,	//
-    qr,
-    singularValue
+  luWithNonPivCrout,					// non-pivoting LU decomposition with Crout algorithm
+  luWithPartialPivDoolittle,	// partial pivoting LU decomposition with Doolittle algorithm
+  luWithPartialPivCrout,			// partial pivoting LU decomposition with Crout algorithm
+  luWithFullPivDoolittle,			// full pivoting LU decomposition with Doolittle algorithm
+  luWithFullPivCrout,					// full pivoting LU decomposition with Crout algorithm
+  ldu,				// LDU decomposition
+  Cholesky,		// Cholesky decomposition
+  modCholesky,	//
+  qr,
+  singularValue
 }
 
 enum DecomposedMat{
@@ -73,31 +73,31 @@ struct MatrixPosition(TypeOfSize Row, TypeOfSize Column){
 
 @safe pure nothrow @nogc:
 
-/***************************
- * constructor
- *
- * Params:
- *	idxRow= 1-based row index
- *	idxColumn= 1-based column index
- ***************************/
-this(IdxType)(in IdxType idxRow, in IdxType idxColumn)
-if(isIntegral!IdxType)
-in{
-  assert(idxRow > 0);
-  assert(idxColumn > 0);
-  assert(idxRow <= Row, "too large row index");
-  assert(idxColumn <= Column, "too large column index");
-}
-do{
-  static if(is(typeof(idxRow): TypeOfSize)){
-    _idxRow= idxRow;
-    _idxColumn= idxColumn;
+  /***************************
+   * constructor
+   *
+   * Params:
+   *	idxRow= 1-based row index
+   *	idxColumn= 1-based column index
+   ***************************/
+  this(IdxType)(in IdxType idxRow, in IdxType idxColumn)
+  if(isIntegral!IdxType)
+  in{
+    assert(idxRow > 0);
+    assert(idxColumn > 0);
+    assert(idxRow <= Row, "too large row index");
+    assert(idxColumn <= Column, "too large column index");
   }
-  else{
-    _idxRow= cast(TypeOfSize)(idxRow);
-    _idxColumn= cast(TypeOfSize)(idxColumn);
+  do{
+    static if(is(typeof(idxRow): TypeOfSize)){
+      _idxRow= idxRow;
+      _idxColumn= idxColumn;
+    }
+    else{
+      _idxRow= cast(TypeOfSize)(idxRow);
+      _idxColumn= cast(TypeOfSize)(idxColumn);
+    }
   }
-}
 
   //@disable this();
   this(){
@@ -511,9 +511,9 @@ Tuple!(TypeOfIndex, "index",
 				       TypeOfSize Column,
 				       MatrixType Shape,
 				       MajorOrder MatOdr)(in MatrixPosition!(Row, Column) idxs)
-if(Shape !is MatrixType.zero &&
+/+if(Shape !is MatrixType.zero &&
    Shape !is MatrixType.permutation &&
-   matrixConstraint!(Row, Column, Shape))
+   matrixConstraint!(Row, Column, Shape))+/
 in(idxs.rangeCheck){
   typeof(return) result;
 
