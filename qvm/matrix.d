@@ -395,7 +395,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	    if(i > 1) w.put(TAB);
 	    w.put("[");
 	    foreach(TypeOfSize j; 1u..Column+1u){
-	      map= internalIndexOf!TemplateArgs(MatrixPosition!(Row, Column)(i, j));	// FIXME:
+	      map= internalIndexOf!(TemplateArgs)(MatrixPosition!(Row, Column)(i, j));	// FIXME:
 	      if(map.isZero){
 		w.put("*");	// always zero
 	      }
@@ -483,38 +483,38 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	if(isSquare || (!isSquare && Scheme is DecompScheme.singularValue)){
 /+
         static if(isLU!Scheme){
-					resultLU.get= LibLU.decompose!Scheme(cast(T[Column][Row])this);
-				}
-				else{
-					assert(false);
-				}
-+/
-			}
-		}
+          resultLU.get= LibLU.decompose!Scheme(cast(T[Column][Row])this);
+	}
+	else{
+	assert(false);
+	}
+	+/
+	}
+    }
 /+
-		/******************************************
-		 * Decomposed matrix
-		 ******************************************/
-		auto decomposedMatrix(DecompScheme Scheme: DecompScheme.singularValue, DecomposedMat Mat)()
-		if(Mat is DecomposedMat.unitaryLeft ||
-			 Mat is DecomposedMat.diagonal ||
-			 Mat is DecomposedMat.unitaryRight){
-			static if(Mat is DecomposedMat.unitaryLeft){
-			  auto MatTmplParams= Tuple!(Row, Row, MatrixType.dense, MatOdr);
-				T[arrayLength!(MatTmplParams[0..3])] num;
-				return new Matrix!MatTmplParams(num);
-			}
-			else static if(Mat is DecomposedMat.diagonal){
-			  auto MatTmplParams= Tuple!(Row, Column, MatrixType.band1, MatOdr);
-				T[arrayLength!(MatTmplParams[0..3])] num;
-				return new Matrix!(MatTmplParams)(num);
-			}
-			else{
-			  auto MatTmplParams= Tuple!(Column, Column, MatrixType.dense, MatOdr);
-				T[arrayLength!(MatTmplParams[0..3])] num;
-				return new Matrix!(MatTmplParams)(num);
-			}
-		}
+    /******************************************
+     * Decomposed matrix
+     ******************************************/
+    auto decomposedMatrix(DecompScheme Scheme: DecompScheme.singularValue, DecomposedMat Mat)()
+    if(Mat is DecomposedMat.unitaryLeft ||
+       Mat is DecomposedMat.diagonal ||
+       Mat is DecomposedMat.unitaryRight){
+      static if(Mat is DecomposedMat.unitaryLeft){
+        auto MatTmplParams= Tuple!(Row, Row, MatrixType.dense, MatOdr);
+	T[arrayLength!(MatTmplParams[0..3])] num;
+	return new Matrix!MatTmplParams(num);
+      }
+      else static if(Mat is DecomposedMat.diagonal){
+        auto MatTmplParams= Tuple!(Row, Column, MatrixType.band1, MatOdr);
+        T[arrayLength!(MatTmplParams[0..3])] num;
+        return new Matrix!(MatTmplParams)(num);
+      }
+      else{
+        auto MatTmplParams= Tuple!(Column, Column, MatrixType.dense, MatOdr);
+        T[arrayLength!(MatTmplParams[0..3])] num;
+        return new Matrix!(MatTmplParams)(num);
+      }
+    }
 
 		auto decomposedMatrix(DecompScheme Scheme: DecompScheme.qr, DecomposedMat Mat)()
 	  if(Mat is DecomposedMat.unitary ||
