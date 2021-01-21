@@ -341,7 +341,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
        * Cast to 2-dimensional array
        ****************************************/
       Array2D opCast(Array2D)() @nogc
-      if(is(Array2D: TypeOfInternalArray)){
+      if(is(Array2D: T[Column][Row])){
 	typeof(return) num= void;
 
 	foreach(i; 0u..Row)
