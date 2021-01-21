@@ -511,7 +511,7 @@ Tuple!(TypeOfIndex, "index",
 				       MajorOrder MatOdr)(in MatrixPosition!(Row, Column) idxs)
 if(Shape !is MatrixType.zero &&
    Shape !is MatrixType.permutation &&
-   matrixConstraint!(Row, Column, Shape)){
+   matrixConstraint!(Row, Column, Shape))
 in(idxs.rangeCheck){
 
   typeof(return) result;
