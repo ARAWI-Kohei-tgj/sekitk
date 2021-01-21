@@ -315,7 +315,10 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
       in(idxRow > 0 && idxRow <= Row
 	 && idxColumn > 0 && idxColumn <= Column){
 	const pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
+        pos.rangeCheck;
+	pragma(msg, "through 0");
 	auto map= internalIndexOf!(Row, Column, Shape, MatOdr)(pos);
+	pragma(msg, "through 1");
 	return map.isZero? VALUE_ZERO: _values[map.index];
       }
 
@@ -337,15 +340,12 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
       /****************************************
        * Cast to 2-dimensional array
        ****************************************/
-      Array2D opCast(Array2D: T[Column][Row])() @nogc
-      if(((MatOdr is MajorOrder.row) && is(Array2D: T[Column][Row])) ||
-	 ((MatOdr is MajorOrder.column) && is(Array2D: T[Row][Column]))){
-	enum ITR_LIMIT_OUTER= (MatOdr is MajorOrder.row)? Row: Column;
-	enum ITR_LIMIT_INNER= (MatOdr is MajorOrder.row)? Column: Row;
+      Array2D opCast(Array2D)() @nogc
+      if(is(Array2D: TypeOfInternalArray)){
 	typeof(return) num= void;
 
-	foreach(i; 0u..ITR_LIMIT_OUTER)
-	  foreach(j; 0u..ITR_LIMIT_INNER){{
+	foreach(i; 0u..Row)
+	  foreach(j; 0u..Column){{
 	      num[i][j]= this.opIndex(i+1u, j+1u);
         }}
 
@@ -518,29 +518,29 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
       }
     }
 
-		auto decomposedMatrix(DecompScheme Scheme: DecompScheme.qr, DecomposedMat Mat)()
-	  if(Mat is DecomposedMat.unitary ||
-			 Mat is DecomposedMat.upperTri){
-			static if(Mat is DecomposedMat.unitary){
-				return new Matrix!(Row, Column, MatrixType.dense, MatOdr)(num);
-			}
-			else{
-				return new Matrix!(Row, Column, MatrixType.upperTri)(num);
-			}
-		}
+    auto decomposedMatrix(DecompScheme Scheme: DecompScheme.qr, DecomposedMat Mat)()
+    if(Mat is DecomposedMat.unitary ||
+       Mat is DecomposedMat.upperTri){
+      static if(Mat is DecomposedMat.unitary){
+        return new Matrix!(Row, Column, MatrixType.dense, MatOdr)(num);
+      }
+      else{
+	return new Matrix!(Row, Column, MatrixType.upperTri)(num);
+      }
+    }
 +/
-		// Methods of square matrix
-		static if(isSquare){
+    // Methods of square matrix
+    static if(isSquare){
 /+
-			/****************************************
-			 * get the decomposed matrix
-			 ****************************************/
-			auto decomposedMatrix(DecompScheme Scheme: DecompScheme.lup,
-														DecomposedMat Mat)() @safe pure nothrow const
-		  if(Mat is DecomposedMat.lowerTri ||
-				 Mat is DecomposedMat.upperTri ||
-				 Mat is DecomposedMat.permutationLeft){
-				static if(Mat is DecomposedMat.lowerTri){
+      /****************************************
+       * get the decomposed matrix
+       ****************************************/
+      auto decomposedMatrix(DecompScheme Scheme: DecompScheme.lup,
+                            DecomposedMat Mat)() @safe pure nothrow const
+      if(Mat is DecomposedMat.lowerTri ||
+         Mat is DecomposedMat.upperTri ||
+	 Mat is DecomposedMat.permutationLeft){
+	static if(Mat is DecomposedMat.lowerTri){
 					static if(Shape is MatrixType.dense || Shape is MatrixType.band3){
 						enum MatrixType ShapeDest= MatrixType.lowerTri;
 					}
