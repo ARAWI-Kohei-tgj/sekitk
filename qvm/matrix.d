@@ -315,7 +315,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
       in(idxRow > 0 && idxRow <= Row
 	 && idxColumn > 0 && idxColumn <= Column){
 	const pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
-        pos.rangeCheck;
+	debug{import std.stdio;writefln!"pos.i= %d, pos.j= %d"(pos.i, pos.j);}
 	auto map= internalIndexOf!(Row, Column, Shape, MatOdr)(pos);
 	return map.isZero? VALUE_ZERO: _values[map.index];
       }

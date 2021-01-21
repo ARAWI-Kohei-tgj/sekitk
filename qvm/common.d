@@ -511,14 +511,11 @@ Tuple!(TypeOfIndex, "index",
 				       MajorOrder MatOdr)(in MatrixPosition!(Row, Column) idxs)
 if(Shape !is MatrixType.zero &&
    Shape !is MatrixType.permutation &&
-   matrixConstraint!(Row, Column, Shape))
+   matrixConstraint!(Row, Column, Shape)){
 in(idxs.rangeCheck){
 
   typeof(return) result;
-  debug{
-  import std.stdio: writefln;
-  writefln!"idxs.i-1= %d, idxs.j-1= %d"(idxs.i-1u, idxs.j-1u);
-  }
+
   if(isBijective!(Row, Column, Shape)(idxs.i-1u, idxs.j-1u)){
     result.isZero= false;
     result.index= indexMap!(Row, Column, Shape, MatOdr)(idxs.i-1u, idxs.j-1u);
