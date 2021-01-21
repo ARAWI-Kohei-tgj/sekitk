@@ -8,7 +8,7 @@ import std.typecons: Tuple;
  *************************************************************/
 alias TypeOfSize= ubyte;
 alias TypeOfIndex= ushort;
-static assert(8u*ushort.sizeof < (8u*ubyte.sizeof)^^2);
+static assert(TypeOfIndex.max+1 >= (TypeOfSize.max)^^2);
 
 // Enumerate types
 enum MatrixType{
@@ -370,7 +370,9 @@ if(matrixConstraint!(Row, Column, Shape)){
  *********************************************/
 bool isBijective(TypeOfSize Row,
 		 TypeOfSize Column,
-		 MatrixType Shape)(in TypeOfSize idxRow, in TypeOfSize idxColumn)
+		 MatrixType Shape,
+		 IdxTyp)(in IdxTyp idxRow, in IdxTyp idxColumn)
+if(isUnsigned!IdxTyp)
 in{
   assert(idxRow >= 0, "too small row index.");
   assert(idxRow < Row, "too large row index.");
@@ -509,12 +511,15 @@ Tuple!(TypeOfIndex, "index",
 				       MajorOrder MatOdr)(in MatrixPosition!(Row, Column) idxs)
 if(Shape !is MatrixType.zero &&
    Shape !is MatrixType.permutation &&
-   matrixConstraint!(Row, Column, Shape)){
-  //in(idxs.rangeCheck){
-  typeof(return) result;
+   matrixConstraint!(Row, Column, Shape))
+in(idxs.rangeCheck){
 
-  if(isBijective!(Row, Column, Shape)(cast(TypeOfSize)(idxs.i-1u),
-				      cast(TypeOfSize)(idxs.j-1u))){
+  typeof(return) result;
+  debug{
+  import std.stdio: writefln;
+  writefln!"idxs.i-1= %d, idxs.j-1= %d"(idxs.i-1u, idxs.j-1u);
+  }
+  if(isBijective!(Row, Column, Shape)(idxs.i-1u, idxs.j-1u)){
     result.isZero= false;
     result.index= indexMap!(Row, Column, Shape, MatOdr)(idxs.i-1u, idxs.j-1u);
   }

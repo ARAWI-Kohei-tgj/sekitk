@@ -316,9 +316,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	 && idxColumn > 0 && idxColumn <= Column){
 	const pos= MatrixPosition!(Row, Column)(idxRow, idxColumn);
         pos.rangeCheck;
-	pragma(msg, "through 0");
 	auto map= internalIndexOf!(Row, Column, Shape, MatOdr)(pos);
-	pragma(msg, "through 1");
 	return map.isZero? VALUE_ZERO: _values[map.index];
       }
 
@@ -341,7 +339,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
        * Cast to 2-dimensional array
        ****************************************/
       Array2D opCast(Array2D)() @nogc
-      if(is(Array2D: T[Column][Row])){
+      if(is(T[Column][Row]: Array2D)){
 	typeof(return) num= void;
 
 	foreach(i; 0u..Row)
