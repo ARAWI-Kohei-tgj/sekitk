@@ -19,7 +19,7 @@ enum string VECTOR_BASE_IMPL= q{
   import std.format: FormatSpec;
   import std.range: isOutputRange;
   import std.complex: Complex;
-  import std.math: sqrt, approxEqual;
+  import std.math: sqrt;
   import std.meta: templateAnd;
   import std.traits: Unqual, isDynamicArray, isStaticArray, isIntegral, ParameterTypeTuple;
 
@@ -52,7 +52,7 @@ public:
      ****************************************/
     this(Scalar)(scope const Scalar num)
     if(is(Scalar: T)){
-      this._values[]= num;
+      this._cmpn[]= num;
     }
 
     /****************************************
@@ -63,7 +63,7 @@ public:
     if((isDynamicArray!ArrayType && is(ArrayType: T[])) ||
        (isStaticArray!ArrayType && is(ArrayType: T[Size])))
     in(nums.length == Size, "mismatch array length"){
-      this._values[]= nums[];
+      this._cmpn[]= nums[];
     }
   }
 
@@ -72,13 +72,13 @@ public:
     ///
     void opOpAssign(string Op)(in TypeOfThis rhs)
     if(isPlusOrMinusSign!Op){
-      mixin("this._values[] "~ Op ~"= rhs._values[];");
+      mixin("this._cmpn[] "~ Op ~"= rhs._cmpn[];");
     }
 
     ///
     void opOpAssign(string Op, TypeR)(in TypeR rhs)
     if((Op == "*" || Op == "/") && is(TypeR: T)){
-      mixin("this._values[] "~ Op~ "= rhs;");
+      mixin("this._cmpn[] "~ Op~ "= rhs;");
     }
 
     ///
@@ -89,7 +89,7 @@ public:
 	result= TypeOfThis(this);
       }
       else{
-	T[Size] num= _values[];
+	T[Size] num= _cmpn[];
 	foreach(ref elm; num) elm= -elm;
 	result= TypeOfThis(num);
       }
@@ -105,7 +105,7 @@ public:
      ******************************************/
     TypeOfThis opBinary(string Op, TypeR: TypeOfThis)(in TypeR rhs) const
     if(isPlusOrMinusSign!Op){
-      auto result= TypeOfThis(this._values);
+      auto result= TypeOfThis(this._cmpn);
       result.opOpAssign!Op(rhs);
       return result;
     }
@@ -116,7 +116,7 @@ public:
      ******************************************/
     TypeOfThis opBinary(string Op, TypeR)(in TypeR rhs) const
     if((Op == "*" || Op == "/") && is(TypeR: T)){
-      auto result= TypeOfThis(this._values);
+      auto result= TypeOfThis(this._cmpn);
       //result.opOpAssign!(Op, TypeR)(rhs);
       result *= rhs;
       return result;
@@ -128,7 +128,7 @@ public:
      ******************************************/
     TypeOfThis opBinaryRight(string Op: "*", TypeL)(in TypeL lhs) const
     if(is(TypeL: T)){
-      auto result= TypeOfThis(this._values);
+      auto result= TypeOfThis(this._cmpn);
       result.opBinary!(Op, TypeL)(lhs);
       return result;
     }
@@ -140,8 +140,9 @@ public:
      *	rhs= other
      ******************************************/
     bool opEquals()(auto ref const TypeOfThis rhs) const{
-      foreach(idx; 0u..Size){
-	if(!approxEqual(this._values[idx], rhs._values[idx])) return false;
+      import std.math: isClose;
+      foreach(scope idx; 0u..Size){
+	if(!isClose(this._cmpn[idx], rhs._cmpn[idx])) return false;
 	else continue;
       }
       return true;
@@ -153,14 +154,15 @@ public:
     int opApply(Dg)(scope Dg dg)
       if(ParameterTypeTuple!Dg.length == 1){
 	typeof(return) result= 0;
-	foreach(elm; _values) result= dg(elm);
+	foreach(scope elm; _cmpn) result= dg(elm);
 	return result;
       }
 
     ///
-    int opApplyReverse(Dg)(scope Dg dg) if(ParameterTypeTuple!Dg.length == 1){
+    int opApplyReverse(Dg)(scope Dg dg)
+    if(ParameterTypeTuple!Dg.length == 1){
       typeof(return) result= 0;
-      foreach_reverse(elm; _values) result= dg(elm);
+      foreach_reverse(scope elm; _cmpn) result= dg(elm);
       return result;
     }
   }
@@ -183,7 +185,7 @@ public:
      *	ZeroNorm
      ******************************************/
     TypeOfThis unit() @property{
-      T vecLen= this.norm;
+      const RT vecLen= this.norm;
       typeof(return) result= TypeOfThis(this);
 
       if(!approxEqualZero(vecLen)){
@@ -202,8 +204,8 @@ public:
      ******************************************/
     bool isApproxEqualTo(in TypeOfThis rhs) nothrow @nogc{
       typeof(return) result= true;
-      foreach(i; 0u..Size){
-	if( !this.approxEqualZero(this._values[i]-rhs._values[i]) ){
+      foreach(scope i; 0u..Size){
+	if( !this.approxEqualZero(this._cmpn[i]-rhs._cmpn[i]) ){
 	  result= false;
 	  break;
 	}
@@ -215,18 +217,18 @@ public:
      * Returns:
      *	true
      ******************************************/
-    bool isNormalized() nothrow @nogc @property{
-      return approxEqual(this.norm, RT(1.0L));
+    bool isNormalized(in RT errRel= 1e-3) nothrow @nogc @property{
+      import sekitk.approx: approxEqualOne;
+      return approxEqualOne!(RT, Threshold)(this.norm, errRel);
     }
   }
 
 private:
   @safe pure nothrow @nogc const{
-    // alias function this.approxEqualZero(num)= sekitk.approx.approxEqualZero!(T, Threshold)(num);
-    bool approxEqualZero(in T num){
+    alias approxEqualZero= (in T num){
       import sekitk.approx: approxEqualZero;
       return approxEqualZero!(T, Threshold)(num);
-    }
+    };
 
     /******************************************
      * Dot product
@@ -234,11 +236,11 @@ private:
     RT dotProdImpl(in TypeOfThis rhs){
       import sekitk.complex.pseudo: conj;
       RT sum= RT(0.0L);
-      foreach(i; 0u..Size) sum += this._values[i]*rhs._values[i].conj;
+      foreach(scope i; 0u..Size) sum += this._cmpn[i]*rhs._cmpn[i].conj;
       return sum;
     }
   }
 
 package:
-  T[Size] _values;
+  T[Size] _cmpn;
 };

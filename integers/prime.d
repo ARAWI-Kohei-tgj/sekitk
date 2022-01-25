@@ -17,53 +17,53 @@ import std.traits: isIntegral, isFloatingPoint;
  *************************************************************/
 T[Len] getPrimeNumbers(T, size_t Beg, size_t Len, size_t Step= 1u)() @safe pure nothrow
 if(((isIntegral!T && T.max >= ushort.max) || isFloatingPoint!T) &&
-	 (Len > 0u && Step > 0u) &&
-	 (Len*Step+Beg <= 0x400)){
-	import std.range: iota, chain, zip;
-	enum size_t BLOCK_SIZE= 256;
+   (Len > 0u && Step > 0u) &&
+   (Len*Step+Beg <= 0x400)){
+  import std.range: iota, chain, zip;
+  enum size_t BLOCK_SIZE= 256;
   enum size_t TERMINAL= Beg+Len*Step;
-	T[Len] num= void;
-	ushort[] primes;
-	import std.stdio;
-	static if(Beg < BLOCK_SIZE){
-		primes= PRIME_NUMBER_0.dup[Beg..$];
-		static if(TERMINAL >= BLOCK_SIZE){
-			primes.chain(PRIME_NUMBER_1.dup);
-			static if(TERMINAL >= 2*BLOCK_SIZE) primes.chain(PRIME_NUMBER_2.dup);
-		}
-	}
-	else static if(Beg < 2*BLOCK_SIZE){
-		primes= PRIME_NUMBER_1.dup[Beg-BLOCK_SIZE..$];
-		static if(TERMINAL >= 3*BLOCK_SIZE) primes.chain(PRIME_NUMBER_2.dup);
-	}
-	else static if(Beg < 3*BLOCK_SIZE){
-		primes= PRIME_NUMBER_2.dup[Beg-2*BLOCK_SIZE..$];
-	}
+  T[Len] num= void;
+  ushort[] primes;
 
-	static foreach(idxDest, idxSrc; zip(iota(Len),
-																			iota(0, Len*Step, Step)
-																			)) num[idxDest]= cast(T)(primes[idxSrc]);
+  static if(Beg < BLOCK_SIZE){
+    primes= PRIME_NUMBER_0.dup[Beg..$];
+    static if(TERMINAL >= BLOCK_SIZE){
+      primes.chain(PRIME_NUMBER_1.dup);
+      static if(TERMINAL >= 2*BLOCK_SIZE) primes.chain(PRIME_NUMBER_2.dup);
+    }
+  }
+  else static if(Beg < 2*BLOCK_SIZE){
+    primes= PRIME_NUMBER_1.dup[Beg-BLOCK_SIZE..$];
+    static if(TERMINAL >= 3*BLOCK_SIZE) primes.chain(PRIME_NUMBER_2.dup);
+  }
+  else static if(Beg < 3*BLOCK_SIZE){
+    primes= PRIME_NUMBER_2.dup[Beg-2*BLOCK_SIZE..$];
+  }
 
-	return num;
+  static foreach(scope idxDest, idxSrc; zip(iota(Len),
+				      iota(0, Len*Step, Step)
+				      )) num[idxDest]= cast(T)(primes[idxSrc]);
+
+  return num;
 }
 @safe pure nothrow unittest{
-	// basic
-	{
-		double[25] num= getPrimeNumbers!(double, 0, 25, 2);
-		double[25] result= [2.0, 5, 11, 17, 23,
-												31, 41, 47, 59, 67,
-												73, 83, 97, 103, 109,
-												127, 137, 149, 157, 167,
-												179, 191, 197, 211, 227];
-		assert(num[] == result[]);
-	}
-	// combined
-	{
-		int [16] num= getPrimeNumbers!(int, 240, 16, 3);
-		int[16] result= [1523, 1549, 1567, 1583, 1607, 1619, 1637, 1667,
-										 1697, 1721, 1741, 1759, 1787, 1811, 1847, 1871];
-		assert(num[] == result[]);
-	}
+  // basic
+  {
+    double[25] num= getPrimeNumbers!(double, 0, 25, 2);
+    double[25] result= [2.0, 5, 11, 17, 23,
+			31, 41, 47, 59, 67,
+			73, 83, 97, 103, 109,
+			127, 137, 149, 157, 167,
+			179, 191, 197, 211, 227];
+    assert(num[] == result[]);
+  }
+  // combined
+  {
+    int [16] num= getPrimeNumbers!(int, 240, 16, 3);
+    int[16] result= [1523, 1549, 1567, 1583, 1607, 1619, 1637, 1667,
+		     1697, 1721, 1741, 1759, 1787, 1811, 1847, 1871];
+    assert(num[] == result[]);
+  }
 }
 
 /*************************************************************

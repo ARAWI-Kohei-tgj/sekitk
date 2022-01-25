@@ -14,6 +14,6 @@ import std.traits: isIntegral;
 Z combination(Z)(in T n, in T i) @safe pure nothrow @nogc
 if(isIntegral!Z)
 in(n >= i){
-	import sekitk.integers.progression: factorial;
-	return factorial!Z(n)/(factorial!T(cast(Z)(n-i))*factorial!Z(i));
+  import sekitk.integers.progression: factorial;
+  return factorial!Z(n)/(factorial!T(cast(Z)(n-i))*factorial!Z(i));
 }

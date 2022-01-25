@@ -33,77 +33,77 @@ public import sekitk.qvm.exception: ZeroNorm, SingularMatrix;
  *************************************************************/
 template SekiTK(T, real Threshold= 1.0e-6L)
 if(isFloatingPoint!T || isComplex!T){
-	// Data types
-	import sekitk.qvm.euclideanvector;
-	import sekitk.qvm.matrix;
-	import sekitk.qvm.quaternion;
+  // Data types
+  import sekitk.qvm.euclideanvector;
+  import sekitk.qvm.matrix;
+  import sekitk.qvm.quaternion;
 
-	mixin VectorImpl!(T, Threshold);	// Vector
-	mixin MatrixImpl!(T, Threshold);	// Matrix
-	static if(isFloatingPoint!T){
-		import sekitk.qvm.quaternion;
-		alias Vector2= Vector!2u;	// Euclidean vector R^2
-		alias Vector3= Vector!3u;	// Euclidean vector R^3
-		mixin QuaternionImpl!(T, Threshold);	/// Quaternion
+  mixin VectorImpl!(T, Threshold);	// Vector
+  mixin MatrixImpl!(T, Threshold);	// Matrix
+  static if(isFloatingPoint!T){
+    import sekitk.qvm.quaternion;
+    alias Vector2= Vector!2u;	// Euclidean vector R^2
+    alias Vector3= Vector!3u;	// Euclidean vector R^3
+    mixin QuaternionImpl!(T, Threshold);	/// Quaternion
+  }
+
+  // Functions
+  @safe pure nothrow{
+    /******************************************
+     * Identity matrix (any a[i=j]= 1, others= 0)
+     *
+     * In order to decrease the memory consumption,
+     * a n-sized identity matrix should be constructed
+     * as diagonal matrix.
+     * However, if you want to use it with other
+     * type of matrix, this function will be useful.
+     ******************************************/
+    Matrx!(Size, Size, Shape, MatOdr) identityMatrix(TypeOfSize Size,
+						     MatrixType Shape,
+						     MajorOrder MatOdr)(){
+      import sekitk.qvm.common: arrayLength;
+      import sekitk.qvm.indexset: IndexSetDiag, IndexSetStrictTriR, IndexSetStrictTriL;
+      T[arrayLength!(Size, Size, Shape)] buf= void;
+      static if(Shape is MatrixType.diag){
+	buf[]= T(1.0L);
+      }
+      else{
+	{
+	  auto idxSet0= IndexSetStrictTriR!(Size, Shape, MatOdr)();
+	  auto idxSet1= IndexSetStrictTriL!(Size, Shape, MatOdr)();
+	  foreach(scope TypeOfSize idx; merge(idxSet0, idxSet1)) buf[idx]= T(0.0L);
 	}
-
-	// Functions
-	@safe pure nothrow{
-		/******************************************
-		 * Identity matrix (any a[i=j]= 1, others= 0)
-		 *
-		 * In order to decrease the memory consumption,
-		 * a n-sized identity matrix should be constructed
-		 * as diagonal matrix.
-		 * However, if you want to use it with other
-		 * type of matrix, this function will be useful.
-		 ******************************************/
-		Matrx!(Size, Size, Shape, MatOdr) identityMatrix(TypeOfSize Size,
-																										 MatrixType Shape,
-																										 MajorOrder MatOdr)(){
-			import sekitk.qvm.common: arrayLength;
-		  import sekitk.qvm.indexset: IndexSetDiag, IndexSetStrictTriR, IndexSetStrictTriL;
-			T[arrayLength!(Size, Size, Shape)] buf= void;
-			static if(Shape is MatrixType.diag){
-				buf[]= T(1.0L);
-			}
-			else{
-				{
-					auto idxSet0= IndexSetStrictTriR!(Size, Shape, MatOdr)();
-					auto idxSet1= IndexSetStrictTriL!(Size, Shape, MatOdr)();
-					foreach(TypeOfSize idx; merge(idxSet0, idxSet1)) buf[idx]= T(0.0L);
-				}
-				{
-					auto idxSet= IndexSetDiag!(Size, Size, Shape, MatOdr)();
-					foreach(TypeOfSize idx; idxSet) buf[idx]= T(1.0L);
-				}
-			}
-			return new typeof(return)(buf);
-		}
-
-		/**************************
-		 * scalar triple product for C^3
-		 *
-		 * a \cdot (b \times c)
-		 **************************/
-		T scalarTripleProd(in Vector!3 a, in Vector!3 b, in Vector!3 c){
-			const Vector!3u[3] temp= [a, b, c];
-			const mat= new Matrix!(3, 3, MatrixType.dense, MajorOrder.column)(temp);
-			return mat.det;
-		}
+	{
+	  auto idxSet= IndexSetDiag!(Size, Size, Shape, MatOdr)();
+	  foreach(scope TypeOfSize idx; idxSet) buf[idx]= T(1.0L);
 	}
+      }
+      return new typeof(return)(buf);
+    }
 
-	/**************************
-	 * vector triple product for C^3
-	 *
-	 * a \tiems (b \times c)
-	 **************************/
-	Vector!3 vectorTripleProd(in Vector!3 a,
-														in Vector!3 b,
-														in Vector!3 c) @safe pure nothrow @nogc{
-		const T[2] coeff= [a*c, a*b];
-		return coeff[0]*b-coeff[1]*c;
-	}
+    /**************************
+     * scalar triple product for C^3
+     *
+     * a \cdot (b \times c)
+     **************************/
+    T scalarTripleProd(in Vector!3 a, in Vector!3 b, in Vector!3 c){
+      const Vector!3u[3] temp= [a, b, c];
+      const mat= new Matrix!(3, 3, MatrixType.dense, MajorOrder.column)(temp);
+      return mat.det;
+    }
+  }
+
+  /**************************
+   * vector triple product for C^3
+   *
+   * a \tiems (b \times c)
+   **************************/
+  Vector!3 vectorTripleProd(in Vector!3 a,
+			    in Vector!3 b,
+			    in Vector!3 c) @safe pure nothrow @nogc{
+    const T[2] coeff= [a*c, a*b];
+    return coeff[0]*b-coeff[1]*c;
+  }
 }
 // end of template `SekiTK'
 

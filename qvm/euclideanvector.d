@@ -18,22 +18,24 @@ if(isFloatingPoint!T || isComplex!T){
   /************************************************************
    * Template of Eucledean vector
    ************************************************************/
-  struct Vector(TypeOfSize Size) if(Size > 0u){
+  struct Vector(TypeOfSize Size)
+  if(Size > 0u){
     mixin(VECTOR_BASE_IMPL);
 
+  public:
     // Constructors
     @safe pure{
       /// Initialize by a column matrix
       this(MajorOrder MatOdr)(in Matrix!(Size, 1u,
 					 MatrixType.dense,
 					 MatOdr) vec) @nogc nothrow{
-	this._values[]= vec.v[];
+	this._cmpn[]= vec.v[];
       }
       /+
        this(T[] args ...)
        in(args.length == Size){
        import std.algorithm: fill;
-       this._values[].fill(args);
+       this._cmpns[].fill(args);
        }
        +/
     }
@@ -53,56 +55,56 @@ if(isFloatingPoint!T || isComplex!T){
 	    elm[0]= T(0.0L);
 	  }
 	  else static if(Size == 3u){
-	    elm[0]= this._values[1]*rhs._values[2]
-	      -this._values[2]*rhs._values[1];
-	    elm[1]= this._values[2]*rhs._values[0]
-	      -this._values[0]*rhs._values[2];
-	    elm[2]= this._values[0]*rhs._values[1]
-	      -this._values[1]*rhs._values[0];
+	    elm[0]= this._cmpn[1]*rhs._cmpn[2]
+	      -this._cmpn[2]*rhs._cmpn[1];
+	    elm[1]= this._cmpn[2]*rhs._cmpn[0]
+	      -this._cmpn[0]*rhs._cmpn[2];
+	    elm[2]= this._cmpn[0]*rhs._cmpn[1]
+	      -this._cmpn[1]*rhs._cmpn[0];
 	  }
 	  else{
-	    elm[0]= this._values[1]*rhs._values[2]
-	      -this._values[2]*rhs._values[1]
-	      -this._values[3]*rhs._values[4]
-	      +this._values[4]*rhs._values[3]
-	      -this._values[5]*rhs._values[6]
-	      +this._values[6]*rhs._values[5];
-	    elm[1]= -this._values[0]*rhs._values[2]
-	      +this._values[2]*rhs._values[0]
-	      -this._values[3]*rhs._values[5]
-	      +this._values[4]*rhs._values[6]
-	      +this._values[5]*rhs._values[3]
-	      -this._values[6]*rhs._values[4];
-	    elm[2]= this._values[0]*rhs._values[1]
-	      -this._values[1]*rhs._values[0]
-	      -this._values[3]*rhs._values[6]
-	      -this._values[4]*rhs._values[5]
-	      +this._values[5]*rhs._values[4]
-	      +this._values[6]*rhs._values[3];
-	    elm[3]= this._values[0]*rhs._values[4]
-	      +this._values[1]*rhs._values[5]
-	      +this._values[2]*rhs._values[6]
-	      -this._values[4]*rhs._values[0]
-	      -this._values[5]*rhs._values[1]
-	      -this._values[6]*rhs._values[2];
-	    elm[4]= -this._values[0]*rhs._values[3]
-	      -this._values[1]*rhs._values[6]
-	      +this._values[2]*rhs._values[5]
-	      +this._values[3]*rhs._values[0]
-	      -this._values[5]*rhs._values[2]
-	      +this._values[6]*rhs._values[1];
-	    elm[5]= this._values[0]*rhs._values[6]
-	      -this._values[1]*rhs._values[3]
-	      -this._values[2]*rhs._values[4]
-	      +this._values[3]*rhs._values[1]
-	      +this._values[4]*rhs._values[2]
-	      -this._values[6]*rhs._values[0];
-	    elm[6]= -this._values[0]*rhs._values[5]
-	      +this._values[1]*rhs._values[4]
-	      -this._values[2]*rhs._values[3]
-	      +this._values[3]*rhs._values[2]
-	      -this._values[4]*rhs._values[1]
-	      +this._values[5]*rhs._values[0];
+	    elm[0]= this._cmpn[1]*rhs._cmpn[2]
+	      -this._cmpn[2]*rhs._cmpn[1]
+	      -this._cmpn[3]*rhs._cmpn[4]
+	      +this._cmpn[4]*rhs._cmpn[3]
+	      -this._cmpn[5]*rhs._cmpn[6]
+	      +this._cmpn[6]*rhs._cmpn[5];
+	    elm[1]= -this._cmpn[0]*rhs._cmpn[2]
+	      +this._cmpn[2]*rhs._cmpn[0]
+	      -this._cmpn[3]*rhs._cmpn[5]
+	      +this._cmpn[4]*rhs._cmpn[6]
+	      +this._cmpn[5]*rhs._cmpn[3]
+	      -this._cmpn[6]*rhs._cmpn[4];
+	    elm[2]= this._cmpn[0]*rhs._cmpn[1]
+	      -this._cmpn[1]*rhs._cmpn[0]
+	      -this._cmpn[3]*rhs._cmpn[6]
+	      -this._cmpn[4]*rhs._cmpn[5]
+	      +this._cmpn[5]*rhs._cmpn[4]
+	      +this._cmpn[6]*rhs._cmpn[3];
+	    elm[3]= this._cmpn[0]*rhs._cmpn[4]
+	      +this._cmpn[1]*rhs._cmpn[5]
+	      +this._cmpn[2]*rhs._cmpn[6]
+	      -this._cmpn[4]*rhs._cmpn[0]
+	      -this._cmpn[5]*rhs._cmpn[1]
+	      -this._cmpn[6]*rhs._cmpn[2];
+	    elm[4]= -this._cmpn[0]*rhs._cmpn[3]
+	      -this._cmpn[1]*rhs._cmpn[6]
+	      +this._cmpn[2]*rhs._cmpn[5]
+	      +this._cmpn[3]*rhs._cmpn[0]
+	      -this._cmpn[5]*rhs._cmpn[2]
+	      +this._cmpn[6]*rhs._cmpn[1];
+	    elm[5]= this._cmpn[0]*rhs._cmpn[6]
+	      -this._cmpn[1]*rhs._cmpn[3]
+	      -this._cmpn[2]*rhs._cmpn[4]
+	      +this._cmpn[3]*rhs._cmpn[1]
+	      +this._cmpn[4]*rhs._cmpn[2]
+	      -this._cmpn[6]*rhs._cmpn[0];
+	    elm[6]= -this._cmpn[0]*rhs._cmpn[5]
+	      +this._cmpn[1]*rhs._cmpn[4]
+	      -this._cmpn[2]*rhs._cmpn[3]
+	      +this._cmpn[3]*rhs._cmpn[2]
+	      -this._cmpn[4]*rhs._cmpn[1]
+	      +this._cmpn[5]*rhs._cmpn[0];
 	  }
 	  return typeof(return)(elm);
 	}
@@ -119,7 +121,7 @@ if(isFloatingPoint!T || isComplex!T){
        * 	idx= index, (1 ≤ idx ≤ SIZE)
        *
        * Returns:
-       * 	element of "T[SIZE] _values" at (idx-1).
+       * 	element of "T[SIZE] _cmpn" at (idx-1).
        *
        * Throws:
        *  RangeError
@@ -128,7 +130,7 @@ if(isFloatingPoint!T || isComplex!T){
       if(isIntegral!IdxType)
       in(idx > 0u)
       in(idx <= Size){
-	return _values[idx-1u];
+	return _cmpn[idx-1u];
       }
 
       /****************************************
@@ -140,7 +142,7 @@ if(isFloatingPoint!T || isComplex!T){
       in(st > 0u)
       in(en <= Size)
       in(en > st){
-	return this._values[st-1u..en-1u].dup;
+	return this._cmpn[st-1u..en-1u].dup;
       }
 
       /// length of the array
@@ -153,12 +155,12 @@ if(isFloatingPoint!T || isComplex!T){
        *  a column matrix
        ****************************************/
       Typ opCast(Typ: Matrix!(Size, 1u, MatrixType.dense, MatOdr), MatOdr)(){
-	return Typ(this._values);
+	return Typ(this._cmpn);
       }
 
       Typ opCast(Typ: T[Size])(){
 	import std.array: staticArray;
-	return this._values[].staticArray!Size;
+	return this._cmpn[].staticArray!Size;
       }
     }
 
@@ -167,12 +169,12 @@ if(isFloatingPoint!T || isComplex!T){
       /// convert to string
       void toString(Writer, Char)(scope Writer wrt, scope const ref FormatSpec!Char formatSpec)
       if(isOutputRange!(Writer, const(Char)[])){
-	import std.format: formatValue;
+	import std.format.write: formatValue;
 	import std.range.primitives: put;
 
 	wrt.put(PAREN_START);
-	foreach(TypeOfSize i; 0u..Size){
-	  wrt.formatValue(this._values[i], formatSpec);
+	foreach(scope TypeOfSize i, scope T elm; this._cmpn){
+	  wrt.formatValue(elm, formatSpec);
 	  if(i < Size-1) wrt.put(DELIM);
 	}
 	wrt.put(PAREN_END);
@@ -191,9 +193,9 @@ if(isFloatingPoint!T || isComplex!T){
 	  buf.reserve(RESERVE_SIZE);
 	}
 
-	auto fmt= FormatSpec!char("%s");
-	toString((const(char)[] s){buf ~= s;}, fmt);
-	return (char[] bufMutable) @trusted{return assumeUnique(bufMutable);}(buf);
+	const auto fmt= FormatSpec!char("%s");
+	toString((in const(char)[] s){buf ~= s;}, fmt);
+	return (in char[] bufMutable) @trusted{return assumeUnique(bufMutable);}(buf);
       }
       unittest{
 	double[4] temp= [1.2, -3.4, 5.6, -7.8];
@@ -211,15 +213,15 @@ if(isFloatingPoint!T || isComplex!T){
       Matrix!(1u, Size,
 	      MatrixType.dense,
 	      MatOdr) rowVector(MajorOrder MatOdr= MajorOrder.row)(){
-	return new typeof(return)(this._values[]);
+	return new typeof(return)(this._cmpn[]);
       }
 
       static if(Size == 2u || Size == 3u){
-	T x() @nogc{return _values[0];}
-	T y() @nogc{return _values[1];}
+	T x() @nogc{return _cmpn[0];}
+	T y() @nogc{return _cmpn[1];}
       }
       static if(Size == 3u){
-	T z() @nogc{return _values[2];}
+	T z() @nogc{return _cmpn[2];}
       }
 
       /**************************************
@@ -233,8 +235,8 @@ if(isFloatingPoint!T || isComplex!T){
 	Matrix!(Size, Size, MatrixType.dense, MajorOrder.row) opProdOuter(in TypeOfThis rhs){
 	  T[arrayLength!(Size, Size, MatrixType.dense)] num= void;
 
-	  foreach(i; 0u..Size)
-	    foreach(j; 0u..Size){{num[i*Size+j]= this._values[i]*rhs._values[j];}}
+	  foreach(scope i; 0u..Size)
+	    foreach(scope j; 0u..Size){{num[i*Size+j]= this._cmpn[i]*rhs._cmpn[j];}}
 
 	  return new typeof(return)(num);
 	}

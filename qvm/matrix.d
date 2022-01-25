@@ -14,7 +14,8 @@ module sekitk.qvm.matrix;
 import std.traits: isFloatingPoint;
 import sekitk.complex.pseudo: isComplex;
 
-mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T){
+mixin template MatrixImpl(T, real Threshold)
+if(isFloatingPoint!T || isComplex!T){
   import sekitk.qvm.common: TypeOfSize, TypeOfIndex, matrixConstraint;
   import sekitk.qvm.impl.zero, sekitk.qvm.impl.permutation;
 
@@ -178,7 +179,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	  enum TypeOfSize STEP= (MatOdr is MajorOrder.row)? Column: Row;
 	  size_t st, en= 0u;
 
-	  foreach(i; 0u..ITR_LIMIT){
+	  foreach(scope i; 0u..ITR_LIMIT){
 	    st= en;
 	    en += STEP;
 	    _values[st..en]= num[i][];
@@ -193,9 +194,9 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	     scope const TypeOfAttr attrGiven= TypeOfAttr.init){
 	  static if(MatOdr is MajorOrder.row){
 	    size_t idx= void;
-	    foreach(idxH; 0u..Column){
+	    foreach(scope idxH; 0u..Column){
 	      idx= idxH;
-	      foreach(idxV; 0u..Row){
+	      foreach(scope idxV; 0u..Row){
 		this._values[idx]= vecArray[idxH]._values[idxV];
 		idx += Column;
 	      }
@@ -203,8 +204,8 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	  }
 	  else{
 	    size_t idx_st= 0u, idx_en= Row;
-	    foreach(idxH; 0u..Column){
-	      this._values[idx_st..idx_en]= vecArray[idxH]._values[];
+	    foreach(scope idxH; 0u..Column){
+	      this._values[idx_st..idx_en]= vecArray[idxH]._cmpn[];
 	      idx_st= idx_en;
 	      idx_en += Row;
 	    }
@@ -342,8 +343,8 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
       if(is(T[Column][Row]: Array2D)){
 	typeof(return) num= void;
 
-	foreach(i; 0u..Row)
-	  foreach(j; 0u..Column){{
+	foreach(scope i; 0u..Row)
+	  foreach(scope j; 0u..Column){{
 	      num[i][j]= this.opIndex(i+1u, j+1u);
         }}
 
@@ -357,7 +358,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
        * Convert to string
        ****************************************/
       override string toString(){
-	string trustedAssumeUnique(char[] bufMutable) @trusted pure{
+	static string trustedAssumeUnique(char[] bufMutable) @trusted pure{
 	  import std.exception: assumeUnique;
 	  return assumeUnique(bufMutable);
 	}
@@ -371,8 +372,8 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 				     )*Row;
 	  buf.reserve(RESERVE_SIZE);
 	}
-	auto fmt= FormatSpec!char("%s");
-	this.toString((const(char)[] s){buf ~= s;}, fmt);
+	const auto fmt= FormatSpec!char("%s");
+	this.toString((in const(char)[] s){buf ~= s;}, fmt);
 
 	return trustedAssumeUnique(buf);
       }
@@ -391,10 +392,10 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	  Tuple!(TypeOfIndex, "index", bool, "isZero") map;
 
 	  w.put(LEFT_PAREN);
-	  foreach(TypeOfSize i; 1u..Row+1u){
+	  foreach(scope TypeOfSize i; 1u..Row+1u){
 	    if(i > 1) w.put(TAB);
 	    w.put("[");
-	    foreach(TypeOfSize j; 1u..Column+1u){
+	    foreach(scope TypeOfSize j; 1u..Column+1u){
 	      map= internalIndexOf!TemplateArgs(MatrixPosition!(Row, Column)(i, j));	// FIXME:
 	      if(map.isZero){
 		w.put("*");	// always zero
@@ -427,7 +428,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 
 	TypeOfInternalArray num= void;
 	auto idxSet= IndexSetTranspose!TemplateArgs();
-	foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc];
+	foreach(scope idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc];
 	return new typeof(return)(num, _attr.transpose);
       }
 
@@ -445,7 +446,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 
 	TypeOfInternalArray num= void;
 	auto idxSet= IndexSetTranspose!TemplateArgs();
-	foreach(idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc].conj;
+	foreach(scope idxTr, idxSrc; zip(idxSet, iota(LEN))) num[idxTr]= _values[idxSrc].conj;
 	return new typeof(return)(num, _attr.transpose);
       }
 
@@ -561,127 +562,127 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 				return new Matrix!(Size, Size, ShapeDest, MatOdr)(lup.matrix!Mat);
 			}
 +/
-		  @property{
-		    /**************************************
-		     * Trace
-		     *
-		     * \tr(\bvec{A})
-		     **************************************/
-		    T trace() pure nothrow @nogc const{
-		      import std.range: dropOne;
-		      typeof(return) result= void;
+      @property{
+	/**************************************
+	 * Trace
+	 *
+	 * \tr(\bvec{A})
+	 **************************************/
+	T trace() pure nothrow @nogc const{
+	  import std.range: dropOne;
+	  typeof(return) result= void;
 
-		      result= _values[0];
-		      static if(Size > 1u){
-			auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
-			foreach(TypeOfIndex idx; idxSet.dropOne) result += _values[idx];
-		      }
-		      return result;
-		    }
+	  result= _values[0];
+	  static if(Size > 1u){
+	    auto idxSet= IndexSetDiag!(Row, Column, Shape, MatOdr)();
+	    foreach(scope TypeOfIndex idx; idxSet.dropOne) result += _values[idx];
+	  }
+	  return result;
+	}
 
-		    /**************************************
-		     * Determinant
-		     **************************************/
-		    T det() pure nothrow @nogc const{
-		      return _attr.isSingular? VALUE_ZERO: detImpl;
-		    }
+	/**************************************
+	 * Determinant
+	 **************************************/
+	T det() pure nothrow @nogc const{
+	  return _attr.isSingular? VALUE_ZERO: detImpl;
+	}
 
-		    /**************************************
-		     * Inverse matrix
-		     **************************************/
-		    typeof(this) inverse() pure{
-		      if(_attr.isSingular){
-			throw new SingularMatrix();
-		      }
-		      else{
-			return new typeof(return)(inverseImpl);
-		      }
-		    }
-		  }
+	/**************************************
+	 * Inverse matrix
+	 **************************************/
+	typeof(this) inverse() pure{
+	  if(_attr.isSingular){
+	    throw new SingularMatrix();
+	  }
+	  else{
+	    return new typeof(return)(inverseImpl);
+	  }
+	}
+      }
 
-		  /****************************************
-		   * Eigen value
-		   *
-		   * \Lambda= \lambda_1, \lambda_2, ..., \lambda_n
-		   ****************************************/
-			/+
-			void findEigenValues() @property{//@safe pure nothrow @property{
-				import std.stdio;	// DEBUG:
-				if(!_ev.isNull){
-					final switch(Shape){
-					case MatrixType.dense:
-						static if(Size == 1u){
-							_ev.get= Eigen(CT, Threshold, Size)(_values);
-						}
-						else static if(Size == 2u){
-							/****************
-							 * 2×2 matrix
-							 *
-							 * \left\{
-							 * \begin{array}
-							 * 	trace(M)= \sum_J \lambda_i
-							 * 	det(M)= \pi_J \lambda_i
-							 * \end{array}
-							 * \right.
-							 *
-							 * index J= {j \in \mathbf{Z}| j= 1,~2,~\cdots,~n}
-							 *
-							 * trace(M)= \lambda_1 + \lambda_2
-							 * det(M)= \lambda_1 \lambda_2
-							 * \Lambda= ax^2+bx+c
-							 * \Lambda= \dfrac{-b \pm \sqrt{b^2-4ac}}{2*a}
-							 * a= 1, b= -trace(M), c= det(M)
-							 ****************/
-							import sekitk.equations: QuadraticEq;
-							auto eq= new QuadraticEq!(T, Threshold)(1.0, -trace, det);
-							_ev.get= new Eigen!(CT, Threshold, Size)(eq.solve);
-						}
-						else{	// n > 2
-							//if(qr is null) decompose(DecompMethod.QR);
-							assert(false, "QR decomposition is not available.");	// FIXME: DO SOMETHING
-						}
-						break;
-					case MatrixType.band1:
-						static if(is(T == RT)){
-							CT[Size] temp= void;
-							foreach(idx; 0u..Size) temp[idx]= complex!RT(_values[idx]);
-							_ev.get= Eigen!(CT, Threshold, Size)(temp);
-						}
-						else{
-							_ev.get= Eigen!(CT, Threshold, Size)(_values);
-						}
-						break;
-					case MatrixType.band3:
-						assert(false, "FIXME: eigen value computation of a tridiagonal matrix");
-						break;
-					case MatrixType.upperTri, MatrixType.lowerTri:
-						CT[Size] num= void;
-						auto idxSet= IndexSetDiag!TemplateArgs();
-						static if(is(T == RT)){
-							foreach(TypeOfIndex idx; idxSet) num[idx]= complex!RT(_values[idx]);
-						}
-						else{
-							foreach(TypeOfIndex idx; idxSet) num[idx]= _values[idx];
-						}
-						_ev.get= Eigen!(CT, Threshold, Size)(num);
-						break;
-					case MatrixType.zero, MatrixType.permutation:
-						assert(false);
-					}
-				}
-				else{}	// NOP: The eigen values have been already obtained
-			}
+      /****************************************
+       * Eigen value
+       *
+       * \Lambda= \lambda_1, \lambda_2, ..., \lambda_n
+       ****************************************/
+      /+
+       void findEigenValues() @property{//@safe pure nothrow @property{
+       import std.stdio;	// DEBUG:
+       if(!_ev.isNull){
+       final switch(Shape){
+       case MatrixType.dense:
+       static if(Size == 1u){
+       _ev.get= Eigen(CT, Threshold, Size)(_values);
+       }
+       else static if(Size == 2u){
+       /****************
+       * 2×2 matrix
+       *
+       * \left\{
+       * \begin{array}
+       * 	trace(M)= \sum_J \lambda_i
+       * 	det(M)= \pi_J \lambda_i
+       * \end{array}
+       * \right.
+       *
+       * index J= {j \in \mathbf{Z}| j= 1,~2,~\cdots,~n}
+       *
+       * trace(M)= \lambda_1 + \lambda_2
+       * det(M)= \lambda_1 \lambda_2
+       * \Lambda= ax^2+bx+c
+       * \Lambda= \dfrac{-b \pm \sqrt{b^2-4ac}}{2*a}
+       * a= 1, b= -trace(M), c= det(M)
+       ****************/
+       import sekitk.equations: QuadraticEq;
+       auto eq= new QuadraticEq!(T, Threshold)(1.0, -trace, det);
+       _ev.get= new Eigen!(CT, Threshold, Size)(eq.solve);
+       }
+       else{	// n > 2
+       //if(qr is null) decompose(DecompMethod.QR);
+       assert(false, "QR decomposition is not available.");	// FIXME: DO SOMETHING
+       }
+       break;
+       case MatrixType.band1:
+       static if(is(T == RT)){
+       CT[Size] temp= void;
+       foreach(idx; 0u..Size) temp[idx]= complex!RT(_values[idx]);
+       _ev.get= Eigen!(CT, Threshold, Size)(temp);
+       }
+       else{
+       _ev.get= Eigen!(CT, Threshold, Size)(_values);
+       }
+       break;
+       case MatrixType.band3:
+       assert(false, "FIXME: eigen value computation of a tridiagonal matrix");
+       break;
+       case MatrixType.upperTri, MatrixType.lowerTri:
+       CT[Size] num= void;
+       auto idxSet= IndexSetDiag!TemplateArgs();
+       static if(is(T == RT)){
+       foreach(TypeOfIndex idx; idxSet) num[idx]= complex!RT(_values[idx]);
+       }
+       else{
+       foreach(TypeOfIndex idx; idxSet) num[idx]= _values[idx];
+       }
+       _ev.get= Eigen!(CT, Threshold, Size)(num);
+       break;
+       case MatrixType.zero, MatrixType.permutation:
+       assert(false);
+       }
+       }
+       else{}	// NOP: The eigen values have been already obtained
+       }
 +/
-			/****************************************
-			 * eigen values
-			 ****************************************/
-/+
-			CT[Size] eigenValues() {//@safe pure nothrow @property{
-				if(!_ev.isNull) findEigenValues;
-				return _ev.get.values;
-			}
+      /****************************************
+       * eigen values
+       ****************************************/
+      /+
+       CT[Size] eigenValues() {//@safe pure nothrow @property{
+       if(!_ev.isNull) findEigenValues;
+       return _ev.get.values;
+       }
 +/
-		}	// end of block "static if(isSquare)"
+    }	// end of block "static if(isSquare)"
 
   package:
     TypeOfInternalArray _values;
@@ -728,7 +729,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 	result[]= _values[IDX_ST .. IDX_ST+Row];
 	break;
       case MajorOrder.column:
-	foreach(i; 0u..Column) result[i]= this.opIndex(i+1u, idxRow+1u);
+	foreach(scope i; 0u..Column) result[i]= this.opIndex(i+1u, idxRow+1u);
       }
       return result;
     }
@@ -746,7 +747,7 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
 
       final switch(MatOdr){
       case MajorOrder.row:
-	foreach(i; 0u..Row) result[i]= this.opIndex(i+1u, idxColumn+1u);
+	foreach(scope i; 0u..Row) result[i]= this.opIndex(i+1u, idxColumn+1u);
 	break;
       case MajorOrder.column:
 	const size_t IDX_ST= Row*idxColumn;
@@ -808,14 +809,14 @@ mixin template MatrixImpl(T, real Threshold) if(isFloatingPoint!T || isComplex!T
     const T[ColumnR][RowLw] aryRB= cast(T[ColumnR][RowLw])matRB;
     T[arrayLength!(TemplateArgsOf!(typeof(return))[0..3])] num;
 
-    foreach(i; 0u..RowUp){
-      foreach(j; 0u..ColumnL) num[Column*i+j]= aryLT[i][j];
-      foreach(j; 0u..ColumnR) num[Column*i+ColumnL+j]= aryRT[i][j];
+    foreach(scope i; 0u..RowUp){
+      foreach(scope j; 0u..ColumnL) num[Column*i+j]= aryLT[i][j];
+      foreach(scope j; 0u..ColumnR) num[Column*i+ColumnL+j]= aryRT[i][j];
     }
 
-    foreach(i; 0u..RowLw){
-      foreach(j; 0u..ColumnL) num[Column*(RowUp+i)+j]= aryLB[i][j];
-      foreach(j; 0u..ColumnR) num[Column*(RowUp+i)+ColumnL+j]= aryRB[i][j];
+    foreach(scope i; 0u..RowLw){
+      foreach(scope j; 0u..ColumnL) num[Column*(RowUp+i)+j]= aryLB[i][j];
+      foreach(scope j; 0u..ColumnR) num[Column*(RowUp+i)+ColumnL+j]= aryRB[i][j];
     }
 
     return new typeof(return)(num);
